@@ -3,21 +3,24 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { DeviceTracker } from '../components/DeviceTracker.js';
 
 export async function mount(container) {
-  let activeTab = 'shops'; // 'shops' | 'devices' | 'receipt' | 'payments' | 'integrations'
+  let activeTab = 'sessions'; // 'sessions' | 'shops' | 'hardware' | 'receipt' | 'payments' | 'integrations'
+  const myFingerprint = DeviceTracker.getFingerprint();
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <div>
-    </div>
+      </div>
       <div id="settings-action-container"></div>
     </div>
 
     <!-- Group 7 Submenu Navigation Tabs -->
     <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto;">
-      <button class="date-chip active" data-set-tab="shops">Store Branches</button>
-      <button class="date-chip" data-set-tab="devices">POS Terminals</button>
+      <button class="date-chip active" data-set-tab="sessions">Active POS Terminals</button>
+      <button class="date-chip" data-set-tab="shops">Store Branches</button>
+      <button class="date-chip" data-set-tab="hardware">Hardware Printers</button>
       <button class="date-chip" data-set-tab="receipt">Design Receipt</button>
       <button class="date-chip" data-set-tab="payments">Payment Channels</button>
       <button class="date-chip" data-set-tab="integrations">API & Webhooks</button>
@@ -44,6 +47,16 @@ export async function mount(container) {
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching ${activeTab} data...</p>`;
 
     switch (activeTab) {
+      case 'sessions':
+        actionArea.innerHTML = `
+          <button class="btn btn-outline" id="btn-refresh-sessions">
+            <i data-lucide="refresh-cw" style="width:16px; height:16px; margin-right:6px;"></i> Refresh Status
+          </button>
+        `;
+        document.getElementById('btn-refresh-sessions').onclick = () => loadActiveTab();
+        await renderDeviceSessionsTable(tableArea);
+        break;
+
       case 'shops':
         actionArea.innerHTML = `
           <button class="btn btn-teal-primary" id="btn-add-shop">
@@ -54,14 +67,14 @@ export async function mount(container) {
         await renderShopsTable(tableArea);
         break;
 
-      case 'devices':
+      case 'hardware':
         actionArea.innerHTML = `
           <button class="btn btn-teal-primary" id="btn-add-device">
-            <i data-lucide="tablet" style="width:16px; height:16px; margin-right:6px;"></i> Register Terminal
+            <i data-lucide="tablet" style="width:16px; height:16px; margin-right:6px;"></i> Register Printer
           </button>
         `;
         document.getElementById('btn-add-device').onclick = () => openDeviceModal();
-        await renderDevicesTable(tableArea);
+        await renderHardwareDevicesTable(tableArea);
         break;
 
       case 'receipt':
@@ -94,7 +107,115 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // 1. Store Branches Tab
+  // 1. Connected Device Sessions (Phones, Tablets & Web Registers)
+  // =========================================================================
+  async function renderDeviceSessionsTable(target) {
+    let query = supabase
+      .from('pos_device_sessions')
+      .select('*, profiles(full_name, email), shops(name)')
+      .order('last_seen_at', { ascending: false });
+
+    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+
+    const { data: sessions, error } = await query;
+    if (error) {
+      target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
+      return;
+    }
+
+    const now = new Date().getTime();
+
+    renderDataTable({
+      targetId: 'settings-table-content',
+      columns: [
+        {
+          label: 'Device Profile',
+          key: 'device_name',
+          render: (val, row) => {
+            const isCurrent = row.device_fingerprint === myFingerprint;
+            return `
+              <div>
+                <strong>${val || 'Handheld Register'}</strong>
+                ${isCurrent ? '<span class="badge badge-teal" style="margin-left:6px;">THIS DEVICE</span>' : ''}
+                <div style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;">
+                  ID: ${row.device_fingerprint.slice(0, 16)}...
+                </div>
+              </div>
+            `;
+          },
+        },
+        {
+          label: 'Operator / Cashier',
+          key: 'profiles',
+          render: (p) => p?.full_name || p?.email || 'Authenticated User',
+        },
+        {
+          label: 'Store Branch',
+          key: 'shops',
+          render: (s) => s?.name || 'Main Branch',
+        },
+        {
+          label: 'Connection State',
+          key: 'last_seen_at',
+          render: (lastSeen, row) => {
+            const diffMin = Math.round((now - new Date(lastSeen).getTime()) / 60000);
+            const isLive = diffMin <= 2 && row.is_active;
+
+            if (isLive) {
+              return `<span class="badge badge-teal" style="font-weight:700;">🟢 ONLINE NOW</span>`;
+            } else if (!row.is_active) {
+              return `<span class="badge" style="background:#fee2e2; color:#ef4444;">REVOKED</span>`;
+            } else {
+              return `<span class="badge">Idle (${diffMin}m ago)</span>`;
+            }
+          },
+        },
+        {
+          label: 'First Registered',
+          key: 'created_at',
+          render: (d) => new Date(d).toLocaleDateString(),
+        },
+      ],
+      data: sessions || [],
+      onAction: (action, id) => {
+        const item = sessions.find((s) => s.id === id);
+        if (item) toggleDeviceAccess(item);
+      },
+    });
+
+    // Replace the default "manage" text on the action buttons with "Revoke/Allow"
+    target.querySelectorAll('button[data-row-id]').forEach((btn) => {
+      const item = sessions.find((s) => s.id === btn.dataset.rowId);
+      if (item) {
+        btn.textContent = item.is_active ? 'Revoke' : 'Reinstate';
+        if (item.is_active) btn.classList.add('text-danger');
+      }
+    });
+  }
+
+  async function toggleDeviceAccess(device) {
+    const nextState = !device.is_active;
+    const confirmMsg = nextState
+      ? `Reinstate device authorization for "${device.device_name}"?`
+      : `Revoke terminal access for "${device.device_name}"? The device will be disconnected.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    const { error } = await supabase
+      .from('pos_device_sessions')
+      .update({ is_active: nextState })
+      .eq('id', device.id);
+
+    if (error) {
+      Toast.error(error.message);
+    } else {
+      Toast.success(`Device status updated.`);
+      await loadActiveTab();
+    }
+  }
+
+  // =========================================================================
+  // 2. Store Branches Tab
   // =========================================================================
   async function renderShopsTable(target) {
     const { data: shops, error } = await supabase.from('shops').select('*').order('created_at');
@@ -129,9 +250,9 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // 2. POS Terminals & Devices Tab
+  // 3. Hardware Printers & Peripherals Tab
   // =========================================================================
-  async function renderDevicesTable(target) {
+  async function renderHardwareDevicesTable(target) {
     let query = supabase.from('pos_devices').select('*').order('created_at');
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
@@ -144,11 +265,11 @@ export async function mount(container) {
     renderDataTable({
       targetId: 'settings-table-content',
       columns: [
-        { label: 'Terminal Name', key: 'device_name', render: (v) => `<strong>${v}</strong>` },
-        { label: 'Hardware Code', key: 'device_code', render: (c) => `<code>${c}</code>` },
+        { label: 'Printer Model', key: 'device_name', render: (v) => `<strong>${v}</strong>` },
+        { label: 'Identifier Code', key: 'device_code', render: (c) => `<code>${c}</code>` },
         { label: 'Interface', key: 'printer_type', render: (t) => t.toUpperCase() },
         { label: 'Paper Width', key: 'paper_width', render: (w) => `${w}mm` },
-        { label: 'Printer IP / Address', key: 'printer_ip', render: (ip) => ip || 'Local host' },
+        { label: 'Printer IP / Host', key: 'printer_ip', render: (ip) => ip || 'Local host' },
         { label: 'Status', key: 'is_active', render: (act) => act ? '<span class="badge badge-teal">ONLINE</span>' : '<span class="badge">OFFLINE</span>' },
       ],
       data: devices || [],
@@ -160,7 +281,7 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // 3. Receipt Template Designer Tab
+  // 4. Receipt Template Designer
   // =========================================================================
   async function renderReceiptDesigner(target) {
     let { data: template } = await supabase
@@ -182,7 +303,6 @@ export async function mount(container) {
 
     target.innerHTML = `
       <div style="display:flex; gap:24px; padding:24px; flex-wrap:wrap;">
-        <!-- Config Form -->
         <div style="flex:1; min-width:320px;">
           <form id="form-save-receipt">
             <div class="form-group">
@@ -190,7 +310,7 @@ export async function mount(container) {
               <input type="text" name="business_name" required value="${template.business_name}" />
             </div>
             <div class="form-group">
-              <label>Tax PIN / Registration #</label>
+              <label>Tax PIN / VAT Registration #</label>
               <input type="text" name="tax_pin" value="${template.tax_pin || ''}" placeholder="e.g. KRA PIN" />
             </div>
             <div class="form-group">
@@ -198,7 +318,7 @@ export async function mount(container) {
               <input type="text" name="header_text" value="${template.header_text || ''}" />
             </div>
             <div class="form-group">
-              <label>Footer Disclaimer / Return Policy</label>
+              <label>Footer Policy Notice</label>
               <textarea name="footer_text" rows="3">${template.footer_text || ''}</textarea>
             </div>
             <div class="form-group">
@@ -217,7 +337,6 @@ export async function mount(container) {
           </form>
         </div>
 
-        <!-- Live Thermal Preview -->
         <div style="width:280px; background:#fff; border:1px solid #cbd5e1; border-radius:6px; padding:20px; font-family:monospace; font-size:0.75rem; box-shadow:0 4px 12px rgba(0,0,0,0.05); height:fit-content;">
           <div style="text-align:center; border-bottom:1px dashed #94a3b8; padding-bottom:10px; margin-bottom:10px;">
             <strong style="font-size:0.95rem; display:block;">${template.business_name}</strong>
@@ -227,7 +346,7 @@ export async function mount(container) {
           <div style="margin-bottom:8px;">
             <div>RCPT: #SAMPLE-1001</div>
             <div>DATE: 20/10/2026 15:30</div>
-            <div>CASHIER: David K.</div>
+            <div>CASHIER: Cashier Counter 1</div>
           </div>
           <div style="border-top:1px dashed #94a3b8; border-bottom:1px dashed #94a3b8; padding:8px 0; margin-bottom:8px;">
             <div style="display:flex; justify-content:space-between;">
@@ -276,7 +395,7 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // 4. Payment Channels Configuration Tab
+  // 5. Payment Methods
   // =========================================================================
   async function renderPaymentMethodsTable(target) {
     let query = supabase.from('store_payment_methods').select('*').order('created_at');
@@ -305,7 +424,7 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // 5. Developer API Keys & Webhooks Tab
+  // 6. Developer Integrations
   // =========================================================================
   async function renderIntegrationsView(target) {
     const { data: keys } = await supabase.from('developer_api_keys').select('*').order('created_at');
@@ -347,11 +466,7 @@ export async function mount(container) {
     document.getElementById('btn-add-webhook').onclick = () => openWebhookModal();
   }
 
-  // =========================================================================
-  // Modals & Action Workflows
-  // =========================================================================
-
-  // Branch Modal
+  // Modals
   function openShopModal() {
     Modal.open({
       title: 'Register Store Branch',
@@ -362,7 +477,7 @@ export async function mount(container) {
             <input type="text" name="name" required placeholder="e.g. QuickSell Mariwenyi Outlet" />
           </div>
           <div class="form-group">
-            <label>Branch Identifier Code</label>
+            <label>Branch Code</label>
             <input type="text" name="branch_code" required placeholder="MRW-01" />
           </div>
           <div class="form-row" style="display:flex; gap:12px;">
@@ -376,7 +491,7 @@ export async function mount(container) {
             </div>
           </div>
           <div class="form-group">
-            <label>Address / Street</label>
+            <label>Address / Location</label>
             <input type="text" name="address" placeholder="Township center" />
           </div>
           <button type="submit" class="btn btn-teal-primary btn-block">Create Store</button>
@@ -393,20 +508,19 @@ export async function mount(container) {
     });
   }
 
-  // POS Device Modal
   function openDeviceModal(dev = null) {
     const isEdit = !!dev;
     Modal.open({
-      title: isEdit ? `Edit: ${dev.device_name}` : 'Connect Hardware Register',
+      title: isEdit ? `Edit: ${dev.device_name}` : 'Connect Hardware Printer',
       content: `
         <form id="form-device-save">
           <div class="form-group">
-            <label>Register / Device Name</label>
-            <input type="text" name="device_name" required value="${dev?.device_name || ''}" placeholder="Counter Till 01" />
+            <label>Hardware Printer Name</label>
+            <input type="text" name="device_name" required value="${dev?.device_name || ''}" placeholder="Receipt Printer 01" />
           </div>
           <div class="form-group">
-            <label>Device Serial Code</label>
-            <input type="text" name="device_code" required value="${dev?.device_code || `POS-${Date.now().toString().slice(-4)}`}" />
+            <label>Printer Serial Code</label>
+            <input type="text" name="device_code" required value="${dev?.device_code || `PRN-${Date.now().toString().slice(-4)}`}" />
           </div>
           <div class="form-row" style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
@@ -429,7 +543,7 @@ export async function mount(container) {
             <label>Printer IP Address (if Network)</label>
             <input type="text" name="printer_ip" value="${dev?.printer_ip || ''}" placeholder="192.168.1.150" />
           </div>
-          <button type="submit" class="btn btn-teal-primary btn-block">${isEdit ? 'Update Terminal' : 'Register Terminal'}</button>
+          <button type="submit" class="btn btn-teal-primary btn-block">${isEdit ? 'Update Printer' : 'Register Printer'}</button>
         </form>
       `,
       onSubmit: async (formData) => {
@@ -448,14 +562,13 @@ export async function mount(container) {
 
         if (error) Toast.error(error.message);
         else {
-          Toast.success('Terminal configuration saved.');
+          Toast.success('Hardware printer saved.');
           await loadActiveTab();
         }
       },
     });
   }
 
-  // Payment Method Modal
   function openPaymentMethodModal(item = null) {
     const isEdit = !!item;
     Modal.open({
@@ -505,7 +618,6 @@ export async function mount(container) {
     });
   }
 
-  // Developer API Key Modal
   function openApiKeyModal() {
     const generatedKey = `qs_live_${Array.from(crypto.getRandomValues(new Uint8Array(18))).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
     Modal.open({
@@ -513,11 +625,11 @@ export async function mount(container) {
       content: `
         <form id="form-gen-key">
           <div class="form-group">
-            <label>Key Name / Client Label</label>
-            <input type="text" name="label" required placeholder="e.g. WooCommerce Sync, External Tablet" />
+            <label>Key Identifier</label>
+            <input type="text" name="label" required placeholder="e.g. Mobile Sync Terminal" />
           </div>
           <div class="form-group">
-            <label>API Key Token (Store safely)</label>
+            <label>API Key Token</label>
             <input type="text" name="api_key" readonly value="${generatedKey}" class="input-disabled" />
           </div>
           <button type="submit" class="btn btn-teal-primary btn-block">Create API Key</button>
@@ -540,7 +652,6 @@ export async function mount(container) {
     });
   }
 
-  // Webhook Modal
   function openWebhookModal() {
     Modal.open({
       title: 'Add Webhook Endpoint',
@@ -575,5 +686,7 @@ export async function mount(container) {
   }
 
   await loadActiveTab();
-  return () => {};
+  return () => {
+    // Teardown logic
+  };
 }

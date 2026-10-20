@@ -2,6 +2,7 @@ import { Auth } from './auth.js';
 import { globalState } from './state.js';
 import { navigate } from './router.js';
 import { Toast } from './components/Toast.js';
+import { DeviceTracker } from './components/DeviceTracker.js';
 
 let pendingAuthEmail = '';
 
@@ -23,17 +24,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateTopBarUserMeta(state);
   });
 
-  // 4. Session Validation
+  // 4. Session Validation & Device Tracker Activation
   try {
     const sessionState = await Auth.syncSession();
     if (!sessionState?.user) {
+      DeviceTracker.stopTracking();
       showAuthOverlay(true);
     } else {
       showAuthOverlay(false);
+      DeviceTracker.startTracking();
       navigate(); // Mount initial hash route
     }
   } catch (err) {
     console.error('Session bootstrap failed:', err);
+    DeviceTracker.stopTracking();
     showAuthOverlay(true);
   }
 });
@@ -125,6 +129,7 @@ function bindAuthActions() {
 
     try {
       await Auth.signIn(email, password);
+      DeviceTracker.startTracking();
       showAuthOverlay(false);
       Toast.success('Signed in successfully.');
       navigate();
@@ -174,6 +179,7 @@ function bindAuthActions() {
 
     try {
       await Auth.verifySignUpOTP(pendingAuthEmail, token);
+      DeviceTracker.startTracking();
       showAuthOverlay(false);
       Toast.success('Account successfully verified.');
       navigate();
@@ -241,7 +247,6 @@ function bindProfileDrawer() {
   const form = document.getElementById('form-profile-update');
 
   openBtn.onclick = () => {
-    // Populate existing preferences from globalState
     document.getElementById('profile-email').value = globalState.user?.email || '';
     document.getElementById('profile-fullname').value = globalState.profile?.full_name || '';
     document.getElementById('profile-currency').value = globalState.preferences.currency;
@@ -269,10 +274,8 @@ function bindProfileDrawer() {
       language: document.getElementById('profile-language').value,
     };
 
-    // Update state & cached storage
     globalState.updatePreferences(newPreferences);
 
-    // Save full name to profiles table
     if (globalState.user?.id) {
       await supabase
         .from('profiles')
@@ -281,7 +284,6 @@ function bindProfileDrawer() {
       if (globalState.profile) globalState.profile.full_name = fullName;
     }
 
-    // Change password if provided
     if (newPassword && newPassword.length >= 6) {
       try {
         await Auth.updatePassword(newPassword);
@@ -293,7 +295,7 @@ function bindProfileDrawer() {
 
     Toast.success('Profile preferences saved.');
     drawer.classList.add('hidden');
-    navigate(); // Refresh current view to reflect currency/time changes
+    navigate();
   };
 }
 
@@ -304,7 +306,6 @@ function bindDateFilters() {
   const chips = document.querySelectorAll('.date-chip[data-period]');
   const calInput = document.getElementById('stats-calendar-filter');
 
-  // Set initial input date to today
   calInput.value = globalState.filterDate;
 
   chips.forEach((chip) => {
@@ -326,7 +327,7 @@ function bindDateFilters() {
       }
 
       calInput.value = globalState.filterDate;
-      navigate(); // Re-fetch active view data
+      navigate();
     };
   });
 
@@ -352,6 +353,7 @@ function bindGlobalNavActions() {
   if (logoutBtn) {
     logoutBtn.onclick = async () => {
       if (confirm('Are you sure you want to log out of QuickSell POS?')) {
+        DeviceTracker.stopTracking();
         await Auth.signOut();
       }
     };
