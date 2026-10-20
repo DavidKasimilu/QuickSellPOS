@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickSell POS | Backoffice Portal</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Lucide Icons CDN (Direct build) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Core Stylesheets -->
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+</head>
+<body class="theme-light">
+
+  <!-- ========================================================================= -->
+  <!-- 1. AUTHENTICATION SCREENS (Overlays)                                      -->
+  <!-- ========================================================================= -->
+  <div id="auth-container" class="auth-wrapper hidden">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="brand-logo">
+          <i data-lucide="store" class="icon-brand"></i>
+          <h1>QuickSell<span>POS</span></h1>
+        </div>
+        <p id="auth-subtitle">Sign in to access your backoffice terminal</p>
+      </div>
+
+      <!-- Sign In View -->
+      <form id="form-login" class="auth-form">
+        <div class="form-group">
+          <label for="login-email">Email Address</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="mail"></i>
+            <input type="email" id="login-email" required placeholder="name@company.com" autocomplete="email" />
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="label-row">
+            <label for="login-password">Password</label>
+            <a href="#" id="link-goto-forgot" class="text-link">Forgot password?</a>
+          </div>
+          <div class="input-icon-wrap">
+            <i data-lucide="lock"></i>
+            <input type="password" id="login-password" required placeholder="••••••••" autocomplete="current-password" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-teal-primary btn-block">Sign In</button>
+        <p class="auth-switch">Don't have an account? <a href="#" id="link-goto-register">Create one</a></p>
+      </form>
+
+      <!-- Registration View -->
+      <form id="form-register" class="auth-form hidden">
+        <div class="form-group">
+          <label for="reg-fullname">Full Name</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="user"></i>
+            <input type="text" id="reg-fullname" required placeholder="e.g. David Kasimilu" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="reg-email">Email Address</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="mail"></i>
+            <input type="email" id="reg-email" required placeholder="name@company.com" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="reg-password">Password</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="lock"></i>
+            <input type="password" id="reg-password" required placeholder="At least 6 characters" minlength="6" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-teal-primary btn-block">Send Verification Code</button>
+        <p class="auth-switch">Already registered? <a href="#" id="link-goto-login-1">Sign In</a></p>
+      </form>
+
+      <!-- OTP Verification View -->
+      <form id="form-otp" class="auth-form hidden">
+        <div class="otp-notice">
+          <i data-lucide="shield-check" class="text-teal"></i>
+          <p>We've sent a 6-digit code to <strong id="otp-target-email"></strong></p>
+        </div>
+        <div class="form-group">
+          <label for="otp-code">Enter 6-Digit OTP</label>
+          <input type="text" id="otp-code" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" 
+                 class="otp-input" placeholder="000000" required />
+        </div>
+        <button type="submit" class="btn btn-teal-primary btn-block">Verify Code</button>
+        <button type="button" id="btn-cancel-otp" class="btn btn-outline btn-block mt-2">Back</button>
+      </form>
+
+      <!-- Forgot Password View -->
+      <form id="form-forgot" class="auth-form hidden">
+        <div class="form-group">
+          <label for="forgot-email">Account Email</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="mail"></i>
+            <input type="email" id="forgot-email" required placeholder="name@company.com" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-teal-primary btn-block">Send Reset Code</button>
+        <p class="auth-switch"><a href="#" id="link-goto-login-2">Return to login</a></p>
+      </form>
+
+      <!-- New Password Reset View -->
+      <form id="form-reset-password" class="auth-form hidden">
+        <div class="form-group">
+          <label for="reset-otp">6-Digit Code</label>
+          <input type="text" id="reset-otp" maxlength="6" inputmode="numeric" class="otp-input" placeholder="000000" required />
+        </div>
+        <div class="form-group">
+          <label for="reset-new-password">New Password</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="lock"></i>
+            <input type="password" id="reset-new-password" required minlength="6" placeholder="New secure password" />
+          </div>
+        </div>
+        <button type="submit" class="btn btn-teal-primary btn-block">Set New Password</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 2. MAIN APPLICATION WORKSPACE                                             -->
+  <!-- ========================================================================= -->
+  <div id="app-container" class="app-shell">
+    
+    <!-- Left Navigation Drawer -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <button class="nav-icon-btn profile-trigger" id="btn-open-profile" title="My Profile">
+          <i data-lucide="circle-user-round"></i>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#pos" class="nav-icon-link" data-nav="pos" title="Cashier Register">
+          <i data-lucide="shopping-cart"></i>
+        </a>
+        <a href="#dashboard" class="nav-icon-link active" data-nav="dashboard" title="Dashboard">
+          <i data-lucide="layout-dashboard"></i>
+        </a>
+        <a href="#sales-summary" class="nav-icon-link" data-nav="sales-summary" title="Sales & Receipts">
+          <i data-lucide="receipt"></i>
+        </a>
+        <a href="#products" class="nav-icon-link" data-nav="products" title="Product Catalog">
+          <i data-lucide="package"></i>
+        </a>
+        <a href="#inventory" class="nav-icon-link" data-nav="inventory" title="Inventory & Stock">
+          <i data-lucide="boxes"></i>
+        </a>
+        <a href="#customers" class="nav-icon-link" data-nav="customers" title="Customers & Debtors">
+          <i data-lucide="users"></i>
+        </a>
+        <a href="#promotions" class="nav-icon-link" data-nav="promotions" title="Discounts & Plans">
+          <i data-lucide="tag"></i>
+        </a>
+        <a href="#employees" class="nav-icon-link" data-nav="employees" title="Employees & Roles">
+          <i data-lucide="badge-percent"></i>
+        </a>
+        <a href="#settings" class="nav-icon-link" data-nav="settings" title="Store & Registers">
+          <i data-lucide="sliders-horizontal"></i>
+        </a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <button class="nav-icon-btn text-danger" id="btn-logout" title="Sign Out">
+          <i data-lucide="log-out"></i>
+        </button>
+      </div>
+    </aside>
+
+    <!-- App Body -->
+    <div class="main-content">
+      
+      <!-- Top Action Bar -->
+      <header class="top-bar">
+        <div class="top-bar-left">
+          <h2 id="current-view-title">Dashboard</h2>
+          <span class="badge badge-teal" id="badge-active-shop">Main Store</span>
+        </div>
+
+        <div class="top-bar-right">
+          <div class="date-controls">
+            <button class="date-chip active" data-period="today">Today</button>
+            <button class="date-chip" data-period="yesterday">Yesterday</button>
+            <button class="date-chip" data-period="7days">Last 7 Days</button>
+            
+            <div class="date-picker-wrap">
+              <i data-lucide="calendar" class="icon-inline"></i>
+              <input type="date" id="stats-calendar-filter" />
+            </div>
+          </div>
+          
+          <div class="profile-summary" id="top-user-pill">
+            <span class="user-role-tag" id="user-role-label">ADMIN</span>
+            <span class="user-email-tag" id="user-email-label">...</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- View Injection Container -->
+      <main id="app-viewport" class="viewport-area"></main>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 3. PROFILE SETTINGS DRAWER                                                -->
+  <!-- ========================================================================= -->
+  <aside id="drawer-profile" class="drawer-panel hidden">
+    <div class="drawer-content">
+      <div class="drawer-header">
+        <h3>User Profile & Preferences</h3>
+        <button class="btn-icon" id="btn-close-profile" title="Close Panel">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <form id="form-profile-update" class="drawer-form">
+        <div class="form-section">
+          <h4>Account Details</h4>
+          <div class="form-group">
+            <label for="profile-email">Email Address</label>
+            <input type="email" id="profile-email" readonly class="input-disabled" />
+          </div>
+          <div class="form-group">
+            <label for="profile-fullname">Full Name</label>
+            <input type="text" id="profile-fullname" required />
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h4>Regional & Currency Setup</h4>
+          
+          <div class="form-group">
+            <label for="profile-currency">Currency Preference</label>
+            <select id="profile-currency">
+              <option value="KES" selected>KES - Kenyan Shilling</option>
+              <option value="TZS">TZS - Tanzanian Shilling</option>
+              <option value="UGS">UGS - Ugandan Shilling</option>
+              <option value="USD">USD - US Dollar</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="profile-timezone">Timezone</label>
+            <select id="profile-timezone">
+              <option value="Africa/Nairobi" selected>Africa/Nairobi (UTC+3)</option>
+              <option value="Africa/Dar_es_Salaam">Africa/Dar_es_Salaam (UTC+3)</option>
+              <option value="Africa/Kampala">Africa/Kampala (UTC+3)</option>
+              <option value="UTC">UTC Universal Time</option>
+            </select>
+          </div>
+
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:1;">
+              <label for="profile-date-format">Date Format</label>
+              <select id="profile-date-format">
+                <option value="DD/MM/YYYY" selected>DD/MM/YYYY</option>
+                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label for="profile-time-format">Time Format</label>
+              <select id="profile-time-format">
+                <option value="12h">12-hour</option>
+                <option value="24h" selected>24-hour</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="profile-language">System Language</label>
+            <select id="profile-language">
+              <option value="en" selected>English (Default)</option>
+              <option value="sw">Kiswahili</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h4>Security</h4>
+          <div class="form-group">
+            <label for="profile-new-password">Change Password</label>
+            <input type="password" id="profile-new-password" minlength="6" placeholder="Enter new password to change" />
+          </div>
+        </div>
+
+        <div class="drawer-actions">
+          <button type="submit" class="btn btn-teal-primary btn-block">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </aside>
+
+  <!-- Global Containers -->
+  <div id="global-modal" class="modal-backdrop hidden"></div>
+  <div id="toast-container" class="toast-stack"></div>
+
+  <!-- Bootstrapping -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

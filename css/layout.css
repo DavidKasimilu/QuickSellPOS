@@ -1,0 +1,423 @@
+:root {
+  --sidebar-width: 68px;
+  --topbar-height: 64px;
+  --drawer-width: 380px;
+  --z-sidebar: 30;
+  --z-topbar: 20;
+  --z-drawer: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+  --transition-fast: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* App Viewport Container */
+.app-shell {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-canvas);
+}
+
+/* ==========================================================================
+   Sidebar Navigation
+   ========================================================================== */
+.sidebar {
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0;
+  z-index: var(--z-sidebar);
+  flex-shrink: 0;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.nav-icon-link, .nav-icon-btn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--text-muted);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.nav-icon-link:hover, .nav-icon-btn:hover {
+  background: var(--teal-50);
+  color: var(--teal-600);
+}
+
+.nav-icon-link.active {
+  background: var(--teal-600);
+  color: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.25);
+}
+
+.sidebar-top, .sidebar-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* Icon fallback enforcement */
+svg.lucide, i[data-lucide] {
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  vertical-align: middle;
+  stroke-width: 2;
+}
+
+/* ==========================================================================
+   Main Content Workspace
+   ========================================================================== */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-canvas);
+}
+
+.top-bar {
+  height: var(--topbar-height);
+  padding: 0 24px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: var(--z-topbar);
+  flex-shrink: 0;
+}
+
+.top-bar-left, .top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.top-bar-left h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.date-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-picker-wrap {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.date-picker-wrap input[type="date"] {
+  padding: 5px 8px 5px 30px;
+  font-size: 0.8125rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-card);
+}
+
+.date-picker-wrap .icon-inline {
+  position: absolute;
+  left: 8px;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  background: var(--bg-canvas);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  font-size: 0.775rem;
+}
+
+.user-role-tag {
+  background: var(--teal-600);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+.user-email-tag {
+  color: var(--text-muted);
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewport-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  position: relative;
+}
+
+/* ==========================================================================
+   Grids & Analytics
+   ========================================================================== */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.kpi-split-values {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.separator-v {
+  width: 1px;
+  height: 36px;
+  background: var(--border-subtle);
+}
+
+.dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+}
+
+/* ==========================================================================
+   Slide-over Drawers
+   ========================================================================== */
+.drawer-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: var(--drawer-width);
+  height: 100vh;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border-subtle);
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.06);
+  z-index: var(--z-drawer);
+  transition: transform var(--transition-smooth);
+}
+
+.drawer-panel.hidden {
+  transform: translateX(100%);
+  display: block !important;
+}
+
+.drawer-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-header {
+  padding: 18px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.drawer-form {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.form-section {
+  margin-bottom: 24px;
+}
+
+.form-section h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 4px;
+}
+
+/* ==========================================================================
+   Overlays & Modals
+   ========================================================================== */
+.auth-wrapper {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at top right, var(--teal-50), var(--bg-canvas));
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.auth-wrapper.hidden, .modal-backdrop.hidden, .hidden {
+  display: none !important;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(3px);
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+/* ==========================================================================
+   Mobile & Tablet Responsiveness (< 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 100vw;
+    --topbar-height: auto;
+    --drawer-width: 100vw;
+  }
+
+  .app-shell {
+    flex-direction: column;
+  }
+
+  /* 1. Convert Sidebar into a Mobile Bottom Navigation Bar */
+  .sidebar {
+    width: 100%;
+    height: 60px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    flex-direction: row;
+    padding: 0 8px;
+    border-right: none;
+    border-top: 1px solid var(--border-subtle);
+    background: #ffffff;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    z-index: var(--z-sidebar);
+  }
+
+  .sidebar-top,
+  .sidebar-bottom {
+    display: none; /* Accessible inside the profile drawer or top bar */
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    justify-content: space-around;
+    width: 100%;
+    gap: 0;
+  }
+
+  .nav-icon-link {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* 2. Top Action Bar Adaptation */
+  .top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 12px 16px;
+    gap: 12px;
+    height: auto;
+  }
+
+  .top-bar-left,
+  .top-bar-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .date-controls {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .profile-summary {
+    display: none; /* Reduces header clutter on small displays */
+  }
+
+  /* 3. Viewport Space for Bottom Nav Bar */
+  .viewport-area {
+    padding: 16px;
+    padding-bottom: 80px; /* Prevents mobile bottom bar from overlapping content */
+  }
+
+  /* 4. KPI & Chart Stacking */
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-charts-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* 5. Drawers Fullscreen on Mobile */
+  .drawer-panel {
+    width: 100vw;
+  }
+
+  /* 6. Horizontal Table Scrolling */
+  .chart-box {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    min-width: 600px;
+  }
+}
