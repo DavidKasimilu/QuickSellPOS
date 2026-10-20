@@ -1,0 +1,2 @@
+# QuickSellPOS
+A POS System
