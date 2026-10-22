@@ -1,6 +1,6 @@
 # QuickSell POS
 
-A lightweight, serverless Point of Sale (POS) and backoffice retail management system built as a vanilla JavaScript Single Page Application (SPA). Powered by Supabase PostgreSQL with strict Row Level Security (RLS) and Cloudflare Workers as an edge API proxy.
+A lightweight, serverless Point of Sale (POS) and backoffice retail management system built as a vanilla JavaScript Single Page Application (SPA). Powered by Supabase PostgreSQL with strict Row Level Security (RLS) and Cloudflare Workers as an edge API proxy. https://davidkasimilu.github.io/QuickSellPOS/
 
 ![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%2B%20RLS-3ECF8E?style=flat&logo=supabase&logoColor=white)
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Edge%20Worker%20Proxy-F38020?style=flat&logo=cloudflare&logoColor=white)
