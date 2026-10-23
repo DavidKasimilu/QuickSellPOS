@@ -648,3 +648,53 @@ input:focus, select:focus, textarea:focus {
     height: 450px;
   }
 }
+
+/* Ensure all inputs and selects inside .input-icon-wrap and .form-group inherit proper dimensions */
+.input-icon-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-icon-wrap i,
+.input-icon-wrap svg {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted, #94a3b8);
+  pointer-events: none;
+}
+
+/* Explicitly style text, email, tel, password inputs and selects */
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="tel"],
+.form-group input[type="password"],
+.form-group input[type="number"],
+.form-group select {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  color: var(--text-main, #0f172a);
+  background-color: #ffffff;
+  border: 1px solid var(--border-subtle, #cbd5e1);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-sizing: border-box;
+}
+
+/* Add left padding when preceded by an icon */
+.input-icon-wrap input {
+  padding-left: 38px !important;
+}
+
+/* Focus state */
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--teal-600, #0d9488);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+}

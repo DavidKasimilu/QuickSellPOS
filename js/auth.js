@@ -11,20 +11,26 @@ export const Auth = {
     return data;
   },
 
-  // Initiate registration (triggers Brevo 6-digit OTP delivery)
-  async signUp(email, password, fullName) {
+  // Initiate registration (includes business name, business type, phone, and country metadata)
+  async signUp(email, password, fullName, businessName, businessType, phone, country) {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: {
+          full_name: fullName,
+          business_name: businessName,
+          business_type: businessType,
+          phone: phone,
+          country: country,
+        },
       },
     });
     if (error) throw error;
     return data;
   },
 
-  // Confirm registration 6-digit OTP token
+  // Confirm registration 8-digit OTP token
   async verifySignUpOTP(email, token) {
     const { data, error } = await supabase.auth.verifyOtp({
       email,

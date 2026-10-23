@@ -141,7 +141,7 @@ function bindAuthActions() {
     }
   };
 
-  // 2. Sign Up (Send 8-digit OTP via Brevo)
+  // 2. Sign Up (Send 8-digit OTP with Business Details)
   const formRegister = document.getElementById('form-register');
   formRegister.onsubmit = async (e) => {
     e.preventDefault();
@@ -150,20 +150,24 @@ function bindAuthActions() {
     btn.textContent = 'Dispatching code...';
 
     const name = document.getElementById('reg-fullname').value.trim();
+    const businessName = document.getElementById('reg-business-name').value.trim();
+    const businessType = document.getElementById('reg-business-type').value;
+    const phone = document.getElementById('reg-phone').value.trim();
+    const country = document.getElementById('reg-country').value;
     const email = document.getElementById('reg-email').value.trim();
     const password = document.getElementById('reg-password').value;
 
     try {
-      await Auth.signUp(email, password, name);
+      await Auth.signUp(email, password, name, businessName, businessType, phone, country);
       pendingAuthEmail = email;
       document.getElementById('otp-target-email').textContent = email;
       Toast.success('Verification code dispatched to your inbox.');
       switchAuthView('form-otp');
     } catch (err) {
-      Toast.error(err.message);
+      Toast.error(err.message || 'Registration failed.');
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Send Verification Code';
+      btn.textContent = 'Register Store & Send OTP';
     }
   };
 
