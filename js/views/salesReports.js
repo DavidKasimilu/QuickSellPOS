@@ -123,7 +123,7 @@ export async function mount(container) {
   async function renderReceiptsTable(target) {
     let query = supabase
       .from('orders')
-      .select('*, customers(name), profiles(full_name)')
+      .select('*, customers(name), profiles!cashier_id(full_name)')
       .eq('is_deleted', false)
       .order('created_at', { ascending: false })
       .limit(50);
