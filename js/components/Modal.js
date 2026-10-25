@@ -16,26 +16,19 @@ export const Modal = {
         this.close();
       }
     };
-
-    // Close on Escape key press
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !this.container.classList.contains('hidden')) {
-        this.close();
-      }
-    });
   },
 
-  open({ title, content, onSubmit, maxWidth = '560px' }) {
+  open({ title, content, onSubmit }) {
     this.init();
     this.container.innerHTML = `
-      <div class="auth-card" style="max-width: ${maxWidth}; width: 100%; position: relative; max-height: 90vh; display: flex; flex-direction: column; animation: slideIn 0.2s ease;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; flex-shrink: 0;">
+      <div class="auth-card" style="max-width: 520px; width: 100%; position: relative; animation: slideIn 0.2s ease;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px;">
           <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin: 0;">${title}</h3>
           <button class="btn-icon" id="modal-close-trigger" title="Close" style="cursor: pointer;">
             <i data-lucide="x" style="width: 20px; height: 20px;"></i>
           </button>
         </div>
-        <div class="modal-body-content" style="overflow-y: auto; padding-right: 4px;">
+        <div class="modal-body-content">
           ${content}
         </div>
       </div>
@@ -60,30 +53,9 @@ export const Modal = {
       if (form) {
         form.onsubmit = async (e) => {
           e.preventDefault();
-          const submitBtn = form.querySelector('button[type="submit"]');
-          const originalText = submitBtn ? submitBtn.innerHTML : '';
-          
-          if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = `Processing...`;
-          }
-
-          try {
-            const formData = Object.fromEntries(new FormData(form).entries());
-            const shouldKeepOpen = await onSubmit(formData);
-            
-            // Only close if the handler did not explicitly return false
-            if (shouldKeepOpen !== false) {
-              this.close();
-            }
-          } catch (err) {
-            console.error('[Modal] Form submit execution error:', err);
-          } finally {
-            if (submitBtn) {
-              submitBtn.disabled = false;
-              submitBtn.innerHTML = originalText;
-            }
-          }
+          const formData = Object.fromEntries(new FormData(form).entries());
+          await onSubmit(formData);
+          this.close();
         };
       }
     }
