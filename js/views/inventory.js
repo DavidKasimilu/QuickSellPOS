@@ -14,7 +14,7 @@ export async function mount(container) {
       <div>
         <span class="live-indicator" style="font-size:0.75rem; color:var(--teal-600); display:inline-flex; align-items:center; gap:4px;">
           <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal-600);"></span>
-          Live Stock Stream Active
+          Live Inventory Engine Active
         </span>
       </div>
       <div id="inv-action-container"></div>
@@ -47,7 +47,7 @@ export async function mount(container) {
     };
   });
 
-  // Reactive state listener for real-time mobile checkout deductions
+  // Reactive listener for live updates
   unsubs.push(
     globalState.subscribeKey('inventory', () => {
       if (activeTab === 'stock' || activeTab === 'valuation') {
@@ -77,7 +77,7 @@ export async function mount(container) {
       case 'valuation':
         actionArea.innerHTML = `
           <button class="btn btn-outline" id="btn-export-val">
-            <i data-lucide="file-spreadsheet" style="width:16px; height:16px; margin-right:6px;"></i> Print Valuation
+            <i data-lucide="printer" style="width:16px; height:16px; margin-right:6px;"></i> Print Valuation
           </button>
         `;
         document.getElementById('btn-export-val').onclick = () => window.print();
@@ -115,17 +115,32 @@ export async function mount(container) {
         break;
 
       case 'po':
-        actionArea.innerHTML = ``;
+        actionArea.innerHTML = `
+          <button class="btn btn-teal-primary" id="btn-create-po">
+            <i data-lucide="file-plus" style="width:16px; height:16px; margin-right:6px;"></i> Create Purchase Order
+          </button>
+        `;
+        document.getElementById('btn-create-po').onclick = () => openCreatePOModal();
         await renderPOTable(tableArea);
         break;
 
       case 'grn':
-        actionArea.innerHTML = ``;
+        actionArea.innerHTML = `
+          <button class="btn btn-teal-primary" id="btn-receive-grn">
+            <i data-lucide="package-check" style="width:16px; height:16px; margin-right:6px;"></i> Receive Stock (GRN)
+          </button>
+        `;
+        document.getElementById('btn-receive-grn').onclick = () => openReceiveGRNModal();
         await renderGRNTable(tableArea);
         break;
 
       case 'prn':
-        actionArea.innerHTML = ``;
+        actionArea.innerHTML = `
+          <button class="btn btn-teal-primary" id="btn-return-prn" style="background:var(--color-danger); border-color:var(--color-danger);">
+            <i data-lucide="package-minus" style="width:16px; height:16px; margin-right:6px;"></i> Return to Supplier (PRN)
+          </button>
+        `;
+        document.getElementById('btn-return-prn').onclick = () => openCreatePRNModal();
         await renderPRNTable(tableArea);
         break;
     }
@@ -137,7 +152,11 @@ export async function mount(container) {
   // 1. Available Stock Table
   // =========================================================================
   async function renderStockTable(target) {
-    let query = supabase.from('inventory').select('*, products(id, name, sku, retail_price, cost_price)').order('quantity_on_hand');
+    let query = supabase
+      .from('inventory')
+      .select('*, products(id, name, sku, barcode, retail_price, cost_price)')
+      .order('quantity_on_hand');
+    
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data, error } = await query;
@@ -150,19 +169,20 @@ export async function mount(container) {
       targetId: 'inv-table-content',
       columns: [
         { label: 'Item Name', key: 'products', render: (p) => `<strong>${p?.name || 'Item'}</strong>` },
-        { label: 'SKU', key: 'products', render: (p) => p?.sku || '-' },
+        { label: 'SKU / Code', key: 'products', render: (p) => `<code>${p?.sku || p?.barcode || '-'}</code>` },
         {
           label: 'Quantity On Hand',
           key: 'quantity_on_hand',
           render: (qty, row) => {
             const isLow = Number(qty) <= Number(row.min_stock_level);
             return `<span style="font-weight:700; color:${isLow ? 'var(--color-danger)' : 'var(--text-main)'};">
-              ${qty} ${isLow ? '(Low)' : ''}
+              ${Number(qty).toLocaleString()} ${isLow ? '(Low)' : ''}
             </span>`;
           },
         },
-        { label: 'Min Level', key: 'min_stock_level' },
+        { label: 'Reorder Level', key: 'min_stock_level', render: (m) => Number(m || 0).toLocaleString() },
         { label: 'Unit Cost', key: 'products', render: (p) => `${Number(p?.cost_price || 0).toLocaleString()} ${currency}` },
+        { label: 'Retail Price', key: 'products', render: (p) => `${Number(p?.retail_price || 0).toLocaleString()} ${currency}` },
         { label: 'Last Count', key: 'updated_at', render: (v) => new Date(v).toLocaleDateString() },
       ],
       data: data || [],
@@ -174,10 +194,10 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // 2. Inventory Valuation & Backdate Reports
+  // 2. Inventory Valuation (Exact Math Engine)
   // =========================================================================
   async function renderValuationReport(target) {
-    let query = supabase.from('inventory').select('quantity_on_hand, products(id, name, cost_price, retail_price)');
+    let query = supabase.from('inventory').select('quantity_on_hand, products(id, name, sku, cost_price, retail_price)');
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data: items, error } = await query;
@@ -193,8 +213,11 @@ export async function mount(container) {
       const qty = Number(item.quantity_on_hand || 0);
       const cost = Number(item.products?.cost_price || 0);
       const retail = Number(item.products?.retail_price || 0);
-      const costSub = qty * cost;
-      const retailSub = qty * retail;
+      
+      const costSub = Math.round((qty * cost) * 100) / 100;
+      const retailSub = Math.round((qty * retail) * 100) / 100;
+      const margin = Math.round((retailSub - costSub) * 100) / 100;
+      const marginPct = retailSub > 0 ? Math.round(((retailSub - costSub) / retailSub) * 100) : 0;
 
       totalCostVal += costSub;
       totalRetailVal += retailSub;
@@ -202,28 +225,36 @@ export async function mount(container) {
       return {
         id: item.products?.id,
         name: item.products?.name,
+        sku: item.products?.sku || '-',
         qty,
         cost,
         retail,
         costSub,
         retailSub,
-        potentialMargin: retailSub - costSub,
+        margin,
+        marginPct,
       };
     });
+
+    const netPotentialProfit = totalRetailVal - totalCostVal;
+    const overallMarginPct = totalRetailVal > 0 ? Math.round((netPotentialProfit / totalRetailVal) * 100) : 0;
 
     target.innerHTML = `
       <div style="padding:20px; border-bottom:1px solid var(--border-subtle); display:flex; gap:20px; flex-wrap:wrap; background:var(--bg-canvas);">
         <div class="kpi-card" style="flex:1; min-width:200px;">
-          <div class="kpi-label">Total Cost Valuation (Asset Basis)</div>
-          <div class="kpi-value">${totalCostVal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency}</div>
+          <div class="kpi-label">Cost Valuation (Asset Basis)</div>
+          <div class="kpi-value">${totalCostVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}</div>
+          <span class="kpi-meta">Capital locked in stock</span>
         </div>
         <div class="kpi-card" style="flex:1; min-width:200px;">
-          <div class="kpi-label">Total Retail Valuation (Projected)</div>
-          <div class="kpi-value" style="color:var(--teal-600);">${totalRetailVal.toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency}</div>
+          <div class="kpi-label">Retail Valuation (Projected)</div>
+          <div class="kpi-value" style="color:var(--teal-600);">${totalRetailVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}</div>
+          <span class="kpi-meta">Expected revenue if sold</span>
         </div>
         <div class="kpi-card" style="flex:1; min-width:200px;">
-          <div class="kpi-label">Projected Gross Margin</div>
-          <div class="kpi-value text-accent-bold">${(totalRetailVal - totalCostVal).toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency}</div>
+          <div class="kpi-label">Projected Gross Profit</div>
+          <div class="kpi-value text-accent-bold">${netPotentialProfit.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}</div>
+          <span class="kpi-meta">Estimated margin: ${overallMarginPct}%</span>
         </div>
       </div>
       <div id="valuation-table-container"></div>
@@ -231,20 +262,27 @@ export async function mount(container) {
 
     renderDataTable({
       targetId: 'valuation-table-container',
+      showDefaultAction: false,
       columns: [
         { label: 'Item Name', key: 'name', render: (n) => `<strong>${n}</strong>` },
-        { label: 'Stock On Hand', key: 'qty' },
+        { label: 'SKU', key: 'sku', render: (s) => `<code>${s}</code>` },
+        { label: 'Stock Qty', key: 'qty', render: (q) => Number(q).toLocaleString() },
         { label: 'Unit Cost', key: 'cost', render: (c) => `${Number(c).toLocaleString()} ${currency}` },
-        { label: 'Total Cost Value', key: 'costSub', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
+        { label: 'Total Asset Cost', key: 'costSub', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
         { label: 'Retail Price', key: 'retail', render: (r) => `${Number(r).toLocaleString()} ${currency}` },
-        { label: 'Total Retail Value', key: 'retailSub', render: (v) => `<strong>${Number(v).toLocaleString()} ${currency}</strong>` },
+        { label: 'Projected Total', key: 'retailSub', render: (v) => `<strong>${Number(v).toLocaleString()} ${currency}</strong>` },
+        { 
+          label: 'Potential Margin', 
+          key: 'margin', 
+          render: (m, r) => `<span style="color:var(--teal-600); font-weight:600;">+${Number(m).toLocaleString()} ${currency} (${r.marginPct}%)</span>` 
+        },
       ],
       data: rows,
     });
   }
 
   // =========================================================================
-  // 3. Inventory Expiry Tracking & Perishable Batches
+  // 3. Perishable Batch Tracking
   // =========================================================================
   async function renderExpiryTrackingTable(target) {
     let query = supabase.from('inventory_batches').select('*, products(name), suppliers(name)').order('expiry_date');
@@ -261,13 +299,15 @@ export async function mount(container) {
 
     renderDataTable({
       targetId: 'inv-table-content',
+      showDefaultAction: false,
       columns: [
         { label: 'Product Name', key: 'products', render: (p) => `<strong>${p?.name || 'Batch'}</strong>` },
         { label: 'Batch #', key: 'batch_number', render: (b) => `<code>${b}</code>` },
-        { label: 'Supplier', key: 'suppliers', render: (s) => s?.name || '-' },
-        { label: 'Remaining Units', key: 'quantity_remaining' },
+        { label: 'Supplier', key: 'suppliers', render: (s) => s?.name || 'Direct Procurement' },
+        { label: 'Received', key: 'quantity_received' },
+        { label: 'Remaining', key: 'quantity_remaining', render: (r) => `<strong>${r}</strong>` },
         {
-          label: 'Expiry Date',
+          label: 'Expiration Status',
           key: 'expiry_date',
           render: (exp) => {
             const expDate = new Date(exp);
@@ -278,7 +318,7 @@ export async function mount(container) {
             } else if (daysLeft <= 7) {
               return `<span class="badge" style="background:#fef3c7; color:#d97706; border-color:#fcd34d;">URGENT: ${daysLeft}d left (${exp})</span>`;
             }
-            return `<span>${exp} (${daysLeft}d)</span>`;
+            return `<span class="badge badge-teal">${exp} (${daysLeft}d remaining)</span>`;
           },
         },
       ],
@@ -331,31 +371,33 @@ export async function mount(container) {
           </form>
         `,
         onSubmit: async (fd) => {
+          const qty = parseFloat(fd.quantity_received) || 0;
           const { error } = await supabase.from('inventory_batches').insert([{
             shop_id: globalState.activeShopId,
             product_id: fd.product_id,
             batch_number: fd.batch_number,
-            quantity_received: parseFloat(fd.quantity_received),
-            quantity_remaining: parseFloat(fd.quantity_received),
+            quantity_received: qty,
+            quantity_remaining: qty,
             expiry_date: fd.expiry_date,
             supplier_id: fd.supplier_id || null,
           }]);
 
-          if (error) Toast.error(error.message);
-          else {
-            Toast.success('Perishable batch logged.');
-            await loadActiveTab();
+          if (error) {
+            Toast.error(error.message);
+            return false;
           }
+          Toast.success('Perishable batch logged.');
+          await loadActiveTab();
         },
       });
     });
   }
 
   // =========================================================================
-  // 4. Physical Stocktake Session Workflow
+  // 4. Physical Stocktake (Variance Reconciliation Math)
   // =========================================================================
   async function renderAuditsTable(target) {
-    let query = supabase.from('inventory_audits').select('*, profiles(full_name)').order('created_at', { ascending: false });
+    let query = supabase.from('inventory_audits').select('*, profiles!initiated_by(full_name)').order('created_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data: audits, error } = await query;
@@ -370,7 +412,7 @@ export async function mount(container) {
         { label: 'Audit #', key: 'audit_number', render: (v) => `<strong>${v}</strong>` },
         { label: 'Auditor', key: 'profiles', render: (p) => p?.full_name || 'Staff' },
         { label: 'Notes', key: 'notes', render: (n) => n || '-' },
-        { label: 'Status', key: 'status', render: (st) => `<span class="badge ${st === 'completed' ? 'badge-teal' : ''}">${st.toUpperCase()}</span>` },
+        { label: 'Status', key: 'status', render: (st) => `<span class="badge ${st === 'completed' ? 'badge-teal' : ''}">${(st || '').toUpperCase()}</span>` },
         { label: 'Date Completed', key: 'completed_at', render: (d) => d ? new Date(d).toLocaleDateString() : 'In Progress' },
       ],
       data: audits || [],
@@ -408,6 +450,7 @@ export async function mount(container) {
 
     Modal.open({
       title: `Physical Stocktake Count Sheet (${auditNum})`,
+      maxWidth: '720px',
       content: `
         <form id="form-stocktake-sheet">
           <input type="hidden" name="count_size" value="${stockItems.length}" />
@@ -437,7 +480,7 @@ export async function mount(container) {
             shop_id: globalState.activeShopId,
             initiated_by: globalState.user?.id,
             status: 'completed',
-            notes: fd.notes,
+            notes: fd.notes || 'Routine physical stocktake',
             completed_at: nowIso,
           }])
           .select()
@@ -445,13 +488,13 @@ export async function mount(container) {
 
         if (auditErr) {
           Toast.error(auditErr.message);
-          return;
+          return false;
         }
 
         for (let i = 0; i < countSize; i++) {
           const prodId = fd[`prod_id_${i}`];
-          const sysQty = parseFloat(fd[`sys_qty_${i}`]);
-          const countedQty = parseFloat(fd[`counted_${i}`]);
+          const sysQty = parseFloat(fd[`sys_qty_${i}`]) || 0;
+          const countedQty = parseFloat(fd[`counted_${i}`]) || 0;
           const discrepancy = countedQty - sysQty;
 
           await supabase.from('inventory_audit_items').insert([{
@@ -468,19 +511,18 @@ export async function mount(container) {
               updated_at: nowIso,
             }).eq('shop_id', globalState.activeShopId).eq('product_id', prodId);
 
-            // Log adjustment movement
             await supabase.from('inventory_transactions').insert([{
               shop_id: globalState.activeShopId,
               product_id: prodId,
               transaction_type: 'stocktake_adjustment',
               quantity: discrepancy,
               reference: `Audit: ${auditNum}`,
-              created_at: nowIso
+              created_at: nowIso,
             }]);
           }
         }
 
-        Toast.success('Stocktake committed and inventory reconciliations updated.');
+        Toast.success('Stocktake committed and inventory variances balanced.');
         await loadActiveTab();
       },
     });
@@ -493,7 +535,7 @@ export async function mount(container) {
         <td style="padding:6px 0;">${i.products?.name}</td>
         <td style="text-align:right;">${i.system_qty}</td>
         <td style="text-align:right;">${i.counted_qty}</td>
-        <td style="text-align:right; font-weight:700; color:${i.discrepancy < 0 ? 'var(--color-danger)' : 'var(--teal-600)'};">
+        <td style="text-align:right; font-weight:700; color:${i.discrepancy < 0 ? 'var(--color-danger)' : (i.discrepancy > 0 ? 'var(--teal-600)' : 'var(--text-main)')};">
           ${i.discrepancy > 0 ? '+' : ''}${i.discrepancy}
         </td>
       </tr>
@@ -501,6 +543,7 @@ export async function mount(container) {
 
     Modal.open({
       title: `Stocktake Result: ${audit.audit_number}`,
+      maxWidth: '680px',
       content: `
         <div>
           <p style="font-size:0.85rem; margin-bottom:12px; color:var(--text-muted);">Auditor notes: <strong>${audit.notes || 'None'}</strong></p>
@@ -518,7 +561,7 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // 5. Productions / Recipe Assemblies (BOM UI)
+  // 5. Recipe / BOM Assemblies
   // =========================================================================
   async function renderBOMTable(target) {
     const { data: boms, error } = await supabase
@@ -532,10 +575,11 @@ export async function mount(container) {
 
     renderDataTable({
       targetId: 'inv-table-content',
+      showDefaultAction: false,
       columns: [
         { label: 'Finished Product (Sold)', key: 'parent', render: (p) => `<strong>${p?.name || 'Item'}</strong>` },
-        { label: 'Raw Ingredient / Material', key: 'raw', render: (r) => r?.name || 'Raw Material' },
-        { label: 'Units Deducted per Sale', key: 'quantity_required', render: (q) => `<code>${q} units</code>` },
+        { label: 'Raw Ingredient to Deduct', key: 'raw', render: (r) => r?.name || 'Raw Material' },
+        { label: 'Deduction per Sale', key: 'quantity_required', render: (q) => `<code>${q} units</code>` },
       ],
       data: boms || [],
     });
@@ -575,7 +619,7 @@ export async function mount(container) {
       onSubmit: async (fd) => {
         if (fd.parent_product_id === fd.raw_material_id) {
           Toast.error('Parent item and raw material cannot be the same item.');
-          return;
+          return false;
         }
 
         const { error } = await supabase.from('product_assemblies').upsert([{
@@ -584,69 +628,364 @@ export async function mount(container) {
           quantity_required: parseFloat(fd.quantity_required),
         }], { onConflict: 'parent_product_id, raw_material_id' });
 
-        if (error) Toast.error(error.message);
-        else {
-          Toast.success('Recipe link established.');
-          await loadActiveTab();
+        if (error) {
+          Toast.error(error.message);
+          return false;
         }
+        Toast.success('Recipe link established.');
+        await loadActiveTab();
       },
     });
   }
 
   // =========================================================================
-  // Standard Stubs for PO, GRN, PRN & Quick Stock Adjust
+  // 6. Purchase Orders (PO) Creation & Math
   // =========================================================================
-  async function renderPOTable(t) {
+  async function renderPOTable(target) {
     let query = supabase.from('purchase_orders').select('*, suppliers(name)').order('created_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data } = await query;
     renderDataTable({
       targetId: 'inv-table-content',
+      showDefaultAction: false,
       columns: [
         { label: 'PO #', key: 'po_number', render: (v) => `<strong>${v}</strong>` },
-        { label: 'Supplier', key: 'suppliers', render: (s) => s?.name || '-' },
-        { label: 'Status', key: 'status', render: (st) => `<span class="badge">${st.toUpperCase()}</span>` },
+        { label: 'Supplier', key: 'suppliers', render: (s) => s?.name || 'Direct' },
+        { label: 'Total Value', key: 'total_amount', render: (v) => `${Number(v || 0).toLocaleString()} ${currency}` },
+        { label: 'Status', key: 'status', render: (st) => `<span class="badge ${st === 'approved' ? 'badge-teal' : ''}">${(st || 'PENDING').toUpperCase()}</span>` },
+        { label: 'Created Date', key: 'created_at', render: (d) => new Date(d).toLocaleDateString() },
       ],
       data: data || [],
     });
   }
 
-  async function renderGRNTable(t) {
+  async function openCreatePOModal() {
+    let pQuery = supabase.from('products').select('id, name, cost_price');
+    let sQuery = supabase.from('suppliers').select('id, name');
+
+    if (globalState.activeShopId) {
+      pQuery = pQuery.eq('shop_id', globalState.activeShopId);
+      sQuery = sQuery.eq('shop_id', globalState.activeShopId);
+    }
+
+    const [{ data: prods }, { data: supps }] = await Promise.all([pQuery, sQuery]);
+    const prodOpts = (prods || []).map((p) => `<option value="${p.id}" data-cost="${p.cost_price || 0}">${p.name}</option>`).join('');
+    const suppOpts = (supps || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+
+    const poNumber = `PO-${Date.now().toString().slice(-6)}`;
+
+    Modal.open({
+      title: `Create Purchase Order (${poNumber})`,
+      content: `
+        <form id="form-po-create">
+          <input type="hidden" name="po_number" value="${poNumber}" />
+          <div class="form-group">
+            <label>Select Vendor / Supplier</label>
+            <select name="supplier_id" required>${suppOpts || '<option value="">No registered suppliers</option>'}</select>
+          </div>
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:2;">
+              <label>Procurement Product</label>
+              <select name="product_id" id="po-prod-select" required>${prodOpts}</select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Units Ordered</label>
+              <input type="number" step="1" min="1" name="quantity" id="po-qty-input" value="10" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Agreed Unit Purchase Cost (${currency})</label>
+            <input type="number" step="0.01" name="unit_cost" id="po-cost-input" value="${prods?.[0]?.cost_price || 0}" required />
+          </div>
+          <div style="padding:10px; background:var(--bg-canvas); border-radius:6px; margin-bottom:16px; font-size:0.875rem;">
+            <span>Estimated Total: </span><strong id="po-total-display">0.00 ${currency}</strong>
+          </div>
+          <button type="submit" class="btn btn-teal-primary btn-block">Issue Purchase Order</button>
+        </form>
+      `,
+      onSubmit: async (fd) => {
+        const qty = parseFloat(fd.quantity) || 0;
+        const cost = parseFloat(fd.unit_cost) || 0;
+        const totalAmount = Math.round((qty * cost) * 100) / 100;
+
+        const { error } = await supabase.from('purchase_orders').insert([{
+          shop_id: globalState.activeShopId,
+          supplier_id: fd.supplier_id || null,
+          po_number: fd.po_number,
+          total_amount: totalAmount,
+          status: 'pending',
+          created_at: new Date().toISOString(),
+        }]);
+
+        if (error) {
+          Toast.error(error.message);
+          return false;
+        }
+        Toast.success(`Purchase order ${poNumber} dispatched.`);
+        await loadActiveTab();
+      },
+    });
+
+    const qtyInp = document.getElementById('po-qty-input');
+    const costInp = document.getElementById('po-cost-input');
+    const totDisp = document.getElementById('po-total-display');
+    const prodSelect = document.getElementById('po-prod-select');
+
+    function recalcPO() {
+      const q = parseFloat(qtyInp.value) || 0;
+      const c = parseFloat(costInp.value) || 0;
+      totDisp.textContent = `${(q * c).toLocaleString(undefined, { minimumFractionDigits: 2 })} ${currency}`;
+    }
+
+    prodSelect.onchange = () => {
+      const selected = prodSelect.options[prodSelect.selectedIndex];
+      costInp.value = selected.dataset.cost || 0;
+      recalcPO();
+    };
+
+    qtyInp.oninput = recalcPO;
+    costInp.oninput = recalcPO;
+    recalcPO();
+  }
+
+  // =========================================================================
+  // 7. Goods Received Notes (GRN - Stock Increment & Cost Accounting)
+  // =========================================================================
+  async function renderGRNTable(target) {
     let query = supabase.from('goods_received_notes').select('*, suppliers(name)').order('received_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data } = await query;
     renderDataTable({
       targetId: 'inv-table-content',
+      showDefaultAction: false,
       columns: [
         { label: 'GRN #', key: 'grn_number', render: (v) => `<strong>${v}</strong>` },
         { label: 'Supplier', key: 'suppliers', render: (s) => s?.name || '-' },
-        { label: 'Delivery Note', key: 'delivery_note_no' },
+        { label: 'Delivery / Invoice Note', key: 'delivery_note_no', render: (d) => `<code>${d || 'N/A'}</code>` },
+        { label: 'Received Date', key: 'received_at', render: (d) => new Date(d).toLocaleDateString() },
       ],
       data: data || [],
     });
   }
 
-  async function renderPRNTable(t) {
+  async function openReceiveGRNModal() {
+    let pQuery = supabase.from('products').select('id, name, cost_price');
+    let sQuery = supabase.from('suppliers').select('id, name');
+
+    if (globalState.activeShopId) {
+      pQuery = pQuery.eq('shop_id', globalState.activeShopId);
+      sQuery = sQuery.eq('shop_id', globalState.activeShopId);
+    }
+
+    const [{ data: prods }, { data: supps }] = await Promise.all([pQuery, sQuery]);
+    const prodOpts = (prods || []).map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+    const suppOpts = (supps || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+
+    const grnNumber = `GRN-${Date.now().toString().slice(-6)}`;
+
+    Modal.open({
+      title: `Receive Goods & Inward Stock (${grnNumber})`,
+      content: `
+        <form id="form-grn-receive">
+          <input type="hidden" name="grn_number" value="${grnNumber}" />
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:1;">
+              <label>Supplier Vendor</label>
+              <select name="supplier_id">${suppOpts || '<option value="">Direct Procurement</option>'}</select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Delivery Note / Waybill #</label>
+              <input type="text" name="delivery_note_no" placeholder="WB-99120" required />
+            </div>
+          </div>
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:2;">
+              <label>Product Being Inwarded</label>
+              <select name="product_id" required>${prodOpts}</select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Quantity Received</label>
+              <input type="number" step="1" min="1" name="received_qty" value="10" required />
+            </div>
+          </div>
+          <button type="submit" class="btn btn-teal-primary btn-block">Inward Stock & Update Inventory</button>
+        </form>
+      `,
+      onSubmit: async (fd) => {
+        const receivedQty = parseFloat(fd.received_qty) || 0;
+        const nowIso = new Date().toISOString();
+
+        // 1. Insert GRN record
+        const { error: grnErr } = await supabase.from('goods_received_notes').insert([{
+          shop_id: globalState.activeShopId,
+          supplier_id: fd.supplier_id || null,
+          grn_number: fd.grn_number,
+          delivery_note_no: fd.delivery_note_no,
+          received_at: nowIso,
+        }]);
+
+        if (grnErr) {
+          Toast.error(grnErr.message);
+          return false;
+        }
+
+        // 2. Increment stock mathematically
+        const { data: invRow } = await supabase
+          .from('inventory')
+          .select('quantity_on_hand')
+          .eq('shop_id', globalState.activeShopId)
+          .eq('product_id', fd.product_id)
+          .maybeSingle();
+
+        const currentQty = Number(invRow?.quantity_on_hand || 0);
+        const newQty = currentQty + receivedQty;
+
+        await supabase.from('inventory').upsert([{
+          shop_id: globalState.activeShopId,
+          product_id: fd.product_id,
+          quantity_on_hand: newQty,
+          updated_at: nowIso,
+        }], { onConflict: 'shop_id, product_id' });
+
+        // 3. Log inward inventory transaction
+        await supabase.from('inventory_transactions').insert([{
+          shop_id: globalState.activeShopId,
+          product_id: fd.product_id,
+          transaction_type: 'purchase_receipt',
+          quantity: receivedQty,
+          reference: `GRN: ${grnNumber} (Note: ${fd.delivery_note_no})`,
+          created_at: nowIso,
+        }]);
+
+        Toast.success(`Stock incremented by +${receivedQty} units.`);
+        await loadActiveTab();
+      },
+    });
+  }
+
+  // =========================================================================
+  // 8. Purchase Return Notes (PRN - Stock Deductions)
+  // =========================================================================
+  async function renderPRNTable(target) {
     let query = supabase.from('purchase_return_notes').select('*, suppliers(name)').order('created_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data } = await query;
     renderDataTable({
       targetId: 'inv-table-content',
+      showDefaultAction: false,
       columns: [
         { label: 'PRN #', key: 'prn_number', render: (v) => `<strong>${v}</strong>` },
-        { label: 'Supplier', key: 'suppliers', render: (s) => s?.name || '-' },
-        { label: 'Status', key: 'status', render: (st) => `<span class="badge">${st.toUpperCase()}</span>` },
+        { label: 'Supplier Returned To', key: 'suppliers', render: (s) => s?.name || '-' },
+        { label: 'Status', key: 'status', render: (st) => `<span class="badge">${(st || '').toUpperCase()}</span>` },
+        { label: 'Return Date', key: 'created_at', render: (d) => new Date(d).toLocaleDateString() },
       ],
       data: data || [],
     });
   }
 
+  async function openCreatePRNModal() {
+    let pQuery = supabase.from('inventory').select('product_id, quantity_on_hand, products(name)');
+    let sQuery = supabase.from('suppliers').select('id, name');
+
+    if (globalState.activeShopId) {
+      pQuery = pQuery.eq('shop_id', globalState.activeShopId);
+      sQuery = sQuery.eq('shop_id', globalState.activeShopId);
+    }
+
+    const [{ data: invItems }, { data: supps }] = await Promise.all([pQuery, sQuery]);
+    const prodOpts = (invItems || []).map((i) => `<option value="${i.product_id}" data-max="${i.quantity_on_hand}">${i.products?.name} (Available: ${i.quantity_on_hand})</option>`).join('');
+    const suppOpts = (supps || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+
+    const prnNumber = `PRN-${Date.now().toString().slice(-6)}`;
+
+    Modal.open({
+      title: `Return Stock to Vendor (${prnNumber})`,
+      content: `
+        <form id="form-prn-return">
+          <input type="hidden" name="prn_number" value="${prnNumber}" />
+          <div class="form-group">
+            <label>Vendor / Supplier</label>
+            <select name="supplier_id" required>${suppOpts || '<option value="">No registered vendors</option>'}</select>
+          </div>
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:2;">
+              <label>Defective / Returned Item</label>
+              <select name="product_id" required>${prodOpts}</select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Units Returned</label>
+              <input type="number" step="1" min="1" name="returned_qty" value="1" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Reason for Rejection / Return</label>
+            <input type="text" name="reason" placeholder="Damaged packaging, expired on receipt" required />
+          </div>
+          <button type="submit" class="btn btn-teal-primary btn-block" style="background:var(--color-danger); border-color:var(--color-danger);">
+            Confirm Return & Deduct Stock
+          </button>
+        </form>
+      `,
+      onSubmit: async (fd) => {
+        const retQty = parseFloat(fd.returned_qty) || 0;
+        const nowIso = new Date().toISOString();
+
+        // Check available stock
+        const { data: invRow } = await supabase
+          .from('inventory')
+          .select('quantity_on_hand')
+          .eq('shop_id', globalState.activeShopId)
+          .eq('product_id', fd.product_id)
+          .maybeSingle();
+
+        const currentQty = Number(invRow?.quantity_on_hand || 0);
+        if (retQty > currentQty) {
+          Toast.error(`Cannot return ${retQty} units. Only ${currentQty} on hand.`);
+          return false;
+        }
+
+        const newQty = currentQty - retQty;
+
+        // 1. Insert PRN record
+        await supabase.from('purchase_return_notes').insert([{
+          shop_id: globalState.activeShopId,
+          supplier_id: fd.supplier_id || null,
+          prn_number: fd.prn_number,
+          status: 'dispatched',
+          created_at: nowIso,
+        }]);
+
+        // 2. Decrement inventory
+        await supabase.from('inventory').update({
+          quantity_on_hand: newQty,
+          updated_at: nowIso,
+        }).eq('shop_id', globalState.activeShopId).eq('product_id', fd.product_id);
+
+        // 3. Log return transaction
+        await supabase.from('inventory_transactions').insert([{
+          shop_id: globalState.activeShopId,
+          product_id: fd.product_id,
+          transaction_type: 'purchase_return',
+          quantity: -retQty,
+          reference: `PRN: ${prnNumber} (${fd.reason})`,
+          created_at: nowIso,
+        }]);
+
+        Toast.success(`Stock decremented by -${retQty} units.`);
+        await loadActiveTab();
+      },
+    });
+  }
+
+  // =========================================================================
+  // Manual Quick Stock Discrepancy Adjustment Modal
+  // =========================================================================
   function openStockAdjustmentModal(target = null) {
     Modal.open({
-      title: target ? `Adjust Stock: ${target.products?.name || 'Item'}` : 'Manual Stock Discrepancy Adjustment',
+      title: target ? `Adjust Stock: ${target.products?.name || 'Item'}` : 'Manual Stock Adjustment',
       content: `
         <form id="form-stock-adj">
           <div class="form-group">
@@ -655,37 +994,35 @@ export async function mount(container) {
           </div>
           <div class="form-group">
             <label>Audit Reason</label>
-            <input type="text" name="reason" placeholder="Damaged / Found inventory" required />
+            <input type="text" name="reason" placeholder="Damaged in transit / Found uncounted stock" required />
           </div>
           <button type="submit" class="btn btn-teal-primary btn-block">Commit Adjustment</button>
         </form>
       `,
       onSubmit: async (fd) => {
-        if (target) {
-          const delta = parseFloat(fd.delta);
-          const newQty = Number(target.quantity_on_hand) + delta;
-          const nowIso = new Date().toISOString();
+        if (!target) return;
+        const delta = parseFloat(fd.delta) || 0;
+        const newQty = Number(target.quantity_on_hand) + delta;
+        const nowIso = new Date().toISOString();
 
-          await supabase.from('inventory').update({
-            quantity_on_hand: newQty,
-            updated_at: nowIso,
-          }).eq('id', target.id);
+        await supabase.from('inventory').update({
+          quantity_on_hand: newQty,
+          updated_at: nowIso,
+        }).eq('id', target.id);
 
-          // Record adjustment transaction
-          if (target.product_id) {
-            await supabase.from('inventory_transactions').insert([{
-              shop_id: globalState.activeShopId,
-              product_id: target.product_id,
-              transaction_type: 'manual_adjustment',
-              quantity: delta,
-              reference: fd.reason,
-              created_at: nowIso
-            }]);
-          }
-
-          Toast.success('Inventory balance updated.');
-          await loadActiveTab();
+        if (target.product_id) {
+          await supabase.from('inventory_transactions').insert([{
+            shop_id: globalState.activeShopId,
+            product_id: target.product_id,
+            transaction_type: 'manual_adjustment',
+            quantity: delta,
+            reference: fd.reason,
+            created_at: nowIso,
+          }]);
         }
+
+        Toast.success('Inventory balance updated.');
+        await loadActiveTab();
       },
     });
   }

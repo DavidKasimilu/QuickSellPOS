@@ -1,4 +1,4 @@
-export function renderDataTable({ targetId, columns, data = [], onAction }) {
+export function renderDataTable({ targetId, columns, data = [], onAction, showDefaultAction = true }) {
   const container = document.getElementById(targetId);
   if (!container) return;
 
@@ -12,9 +12,12 @@ export function renderDataTable({ targetId, columns, data = [], onAction }) {
     return;
   }
 
+  // Only append default Actions header if onAction is provided AND showDefaultAction is true
+  const includeActionCol = Boolean(onAction && showDefaultAction);
+
   const theadCols = columns
     .map((c) => `<th style="${c.align ? `text-align:${c.align};` : ''}">${c.label}</th>`)
-    .join('') + (onAction ? '<th style="text-align: right;">Actions</th>' : '');
+    .join('') + (includeActionCol ? '<th style="text-align: right;">Actions</th>' : '');
 
   const tbodyRows = data
     .map((row) => {
@@ -25,10 +28,10 @@ export function renderDataTable({ targetId, columns, data = [], onAction }) {
         })
         .join('');
 
-      const actionBtn = onAction
+      const actionBtn = includeActionCol
         ? `<td style="text-align: right;">
             <button class="btn btn-outline btn-sm" data-row-id="${row.id}" data-action="manage">
-              Edit
+              Manage
             </button>
            </td>`
         : '';
@@ -50,13 +53,13 @@ export function renderDataTable({ targetId, columns, data = [], onAction }) {
 
   if (onAction) {
     container.querySelectorAll('button[data-row-id]').forEach((btn) => {
-      btn.onclick = () => {
-        onAction(btn.dataset.action, btn.dataset.rowId);
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        onAction(btn.dataset.action || 'manage', btn.dataset.rowId);
       };
     });
   }
 
-  // Refresh Lucide icons within newly created rows
   if (window.lucide) {
     window.lucide.createIcons();
   }
