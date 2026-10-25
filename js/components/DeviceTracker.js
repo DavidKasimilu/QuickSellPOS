@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
+import { Auth } from '../auth.js';
 
 export const DeviceTracker = {
   heartbeatInterval: null,
@@ -56,14 +57,54 @@ export const DeviceTracker = {
     if (!globalState.user?.id || !globalState.activeShopId) return;
 
     const device = this.getDeviceInfo();
+    const nowIso = new Date().toISOString();
+
     try {
-      await supabase.rpc('touch_device_heartbeat', {
-        p_device_fingerprint: device.fingerprint,
-        p_device_name: device.name,
-        p_shop_id: globalState.activeShopId,
-      });
+      // 1. Try atomic database RPC function first
+      let rpcSuccess = false;
+      try {
+        const { error: rpcErr } = await supabase.rpc('touch_device_heartbeat', {
+          p_device_fingerprint: device.fingerprint,
+          p_device_name: device.name,
+          p_shop_id: globalState.activeShopId,
+        });
+
+        if (!rpcErr) {
+          rpcSuccess = true;
+        }
+      } catch (rpcEx) {
+        // Fallback to direct table upsert
+      }
+
+      // 2. Fallback direct table upsert into pos_device_sessions
+      if (!rpcSuccess) {
+        const { data: sessionRecord, error: upsertErr } = await supabase
+          .from('pos_device_sessions')
+          .upsert([{
+            device_fingerprint: device.fingerprint,
+            device_name: device.name,
+            shop_id: globalState.activeShopId,
+            user_id: globalState.user.id,
+            last_seen_at: nowIso,
+            is_active: true,
+            updated_at: nowIso
+          }], { onConflict: 'device_fingerprint' })
+          .select('is_active')
+          .maybeSingle();
+
+        // 3. Security Enforcement: If admin revoked this terminal, log it out
+        if (sessionRecord && sessionRecord.is_active === false) {
+          this.stopTracking();
+          alert('This POS device terminal session has been revoked by an administrator.');
+          await Auth.signOut();
+        }
+
+        if (upsertErr) {
+          console.warn('[DeviceTracker] Heartbeat upsert error:', upsertErr.message);
+        }
+      }
     } catch (err) {
-      console.warn('Device heartbeat ping failed:', err.message);
+      console.warn('[DeviceTracker] Heartbeat ping failed:', err.message);
     }
   },
 

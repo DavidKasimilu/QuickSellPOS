@@ -42,8 +42,9 @@ const routes = {
 let currentCleanup = null;
 
 export async function navigate() {
-  const hash = window.location.hash || '#pos';
-  const targetRoute = routes[hash] || routes['#dashboard'];
+  const fullHash = window.location.hash || '#pos';
+  const cleanHash = fullHash.split('?')[0]; // Strip search query parameters if present
+  const targetRoute = routes[cleanHash] || routes['#dashboard'];
   const viewport = document.getElementById('app-viewport');
   const titleEl = document.getElementById('current-view-title');
 
@@ -52,23 +53,26 @@ export async function navigate() {
   }
 
   // Update sidebar active link state
-  document.querySelectorAll('.sidebar-nav .nav-icon-link').forEach((link) => {
-    if (link.getAttribute('href') === hash) {
+  document.querySelectorAll('.sidebar-nav .nav-icon-link, .nav-link').forEach((link) => {
+    const href = link.getAttribute('href');
+    if (href === cleanHash || href === fullHash) {
       link.classList.add('active');
     } else {
       link.classList.remove('active');
     }
   });
 
-  // Execute previous view's teardown cleanup function
+  // Execute previous view's teardown cleanup function to clear real-time channels & DOM timers
   if (typeof currentCleanup === 'function') {
     try {
-      currentCleanup();
+      await currentCleanup();
     } catch (err) {
       console.warn('Error during route teardown:', err);
     }
     currentCleanup = null;
   }
+
+  if (!viewport) return;
 
   // Render temporary loader in the viewport
   viewport.innerHTML = `
@@ -80,6 +84,8 @@ export async function navigate() {
   try {
     const module = await targetRoute.loader();
     viewport.innerHTML = '';
+    
+    // Mount view and capture cleanup handler
     currentCleanup = await module.mount(viewport);
 
     if (window.lucide) {

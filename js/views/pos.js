@@ -6,6 +6,7 @@ import { PrinterDriver } from '../components/PrinterDriver.js';
 
 export async function mount(container) {
   const currency = globalState.preferences.currency || 'KES';
+  let unsubs = [];
   
   // Terminal Local Cart State
   let cart = [];
@@ -89,6 +90,18 @@ export async function mount(container) {
     </div>
   `;
 
+  // Reactive listeners for live catalog updates
+  unsubs.push(
+    globalState.subscribeKey('products', () => {
+      loadData();
+    })
+  );
+  unsubs.push(
+    globalState.subscribeKey('inventory', () => {
+      loadData();
+    })
+  );
+
   // =========================================================================
   // Data Loading
   // =========================================================================
@@ -96,14 +109,23 @@ export async function mount(container) {
     let prodQuery = supabase
       .from('products')
       .select('*, categories(name)')
+      .eq('is_active', true)
       .order('name');
     
     if (globalState.activeShopId) prodQuery = prodQuery.eq('shop_id', globalState.activeShopId);
 
+    let catQuery = supabase.from('categories').select('*').order('name');
+    if (globalState.activeShopId) {
+      catQuery = catQuery.or(`shop_id.eq.${globalState.activeShopId},shop_id.is.null`);
+    }
+
+    let discQuery = supabase.from('discount_plans').select('*').eq('is_active', true);
+    if (globalState.activeShopId) discQuery = discQuery.eq('shop_id', globalState.activeShopId);
+
     const [prodRes, catRes, discRes] = await Promise.all([
       prodQuery,
-      supabase.from('categories').select('*').order('name'),
-      supabase.from('discount_plans').select('*').eq('is_active', true),
+      catQuery,
+      discQuery,
     ]);
 
     products = prodRes.data || [];
@@ -116,6 +138,7 @@ export async function mount(container) {
 
   function renderCategoryButtons() {
     const bar = document.getElementById('pos-category-bar');
+    if (!bar) return;
     const catHtml = categories.map((c) => `
       <button class="date-chip" data-cat="${c.id}">${c.name}</button>
     `).join('');
@@ -134,6 +157,7 @@ export async function mount(container) {
 
   function renderProductGrid(filterText = '') {
     const grid = document.getElementById('pos-grid');
+    if (!grid) return;
     const term = filterText.toLowerCase().trim();
 
     const filtered = products.filter((p) => {
@@ -199,14 +223,14 @@ export async function mount(container) {
               type="${inputType}" 
               name="${inputGroupName}" 
               value="${opt.id}" 
-              data-price="${opt.price_delta}" 
+              data-price="${opt.price_delta || opt.price_impact || 0}" 
               data-name="${opt.name}"
               ${inputType === 'radio' && idx === 0 ? 'checked' : ''} 
             />
             <span style="margin-left:8px; font-size:0.875rem;">${opt.name}</span>
           </div>
           <span style="font-weight:600; color:var(--teal-600); font-size:0.875rem;">
-            +${Number(opt.price_delta).toLocaleString()} ${currency}
+            +${Number(opt.price_delta || opt.price_impact || 0).toLocaleString()} ${currency}
           </span>
         </label>
       `).join('');
@@ -214,7 +238,7 @@ export async function mount(container) {
       formContent += `
         <div style="margin-bottom:16px;">
           <h4 style="font-size:0.875rem; font-weight:700; margin-bottom:8px; color:var(--text-main);">
-            ${grp.name} <span style="font-size:0.75rem; font-weight:normal; color:var(--text-muted);">(${grp.selection_type.toUpperCase()})</span>
+            ${grp.name} <span style="font-size:0.75rem; font-weight:normal; color:var(--text-muted);">(${(grp.selection_type || 'single').toUpperCase()})</span>
           </h4>
           <div style="background:var(--bg-canvas); padding:6px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
             ${options}
@@ -280,7 +304,6 @@ export async function mount(container) {
     const idx = cart.findIndex((i) => i.id === productId && (!itemName || i.name === itemName));
     if (idx === -1) return;
 
-    // Hook: Detect and record item dropped from active counter ticket
     if (delta < 0) {
       const droppedItem = cart[idx];
       supabase.from('cart_discard_logs').insert([{
@@ -291,6 +314,7 @@ export async function mount(container) {
         unit_price: droppedItem.price,
         cashier_id: globalState.user?.id,
         reason: 'Item decremented/removed from open cart ticket',
+        created_at: new Date().toISOString()
       }]).then();
     }
 
@@ -329,6 +353,7 @@ export async function mount(container) {
     const list = document.getElementById('cart-items-list');
     const countEl = document.getElementById('cart-item-count');
     const checkoutBtn = document.getElementById('btn-checkout-trigger');
+    if (!list || !countEl || !checkoutBtn) return;
 
     if (!cart.length) {
       list.innerHTML = `
@@ -454,51 +479,87 @@ export async function mount(container) {
   async function finalizeSale(paymentMethod, refCode, finalAmount) {
     const { subtotal, discountAmount, taxAmount, grandTotal } = calculateTotals();
     const receiptNo = `QS-${Date.now().toString().slice(-8)}`;
+    const orderId = crypto.randomUUID();
+    const nowIso = new Date().toISOString();
+
+    const orderPayload = {
+      id: orderId,
+      shop_id: globalState.activeShopId,
+      cashier_id: globalState.user?.id,
+      customer_id: null,
+      shift_id: globalState.currentShift?.id || null,
+      receipt_no: receiptNo,
+      service_type: serviceType,
+      order_status: 'completed',
+      subtotal: subtotal,
+      discount_amount: discountAmount,
+      tax_amount: taxAmount,
+      total: grandTotal,
+      synced_from_offline: false,
+      created_at: nowIso,
+    };
+
+    const lineItems = cart.map((i) => ({
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      product_id: i.id,
+      product_name: i.name,
+      quantity: i.quantity,
+      unit_price: i.price,
+      cost_price: i.cost_price,
+      tax_rate: i.tax_rate,
+      discount_amount: 0,
+      total: i.price * i.quantity,
+    }));
+
+    const paymentsPayload = [{
+      id: crypto.randomUUID(),
+      order_id: orderId,
+      payment_method: paymentMethod,
+      amount: grandTotal,
+      reference_no: refCode || null,
+      reference_code: refCode || null,
+      created_at: nowIso,
+    }];
 
     try {
-      // 1. Create Order Master Record
-      const { data: order, error: orderErr } = await supabase
-        .from('orders')
-        .insert([{
-          shop_id: globalState.activeShopId,
-          cashier_id: globalState.user?.id,
-          receipt_no: receiptNo,
-          service_type: serviceType,
-          order_status: 'completed',
-          subtotal: subtotal,
-          discount_amount: discountAmount,
-          tax_amount: taxAmount,
-          total: grandTotal,
-        }])
-        .select()
-        .single();
+      // 1. Process Sale via Atomic Supabase RPC
+      let rpcExecuted = false;
+      try {
+        const { error: rpcErr } = await supabase.rpc('process_pos_sale', {
+          p_order: orderPayload,
+          p_items: lineItems,
+          p_payments: paymentsPayload,
+        });
 
-      if (orderErr) throw orderErr;
+        if (!rpcErr) {
+          rpcExecuted = true;
+        } else {
+          console.warn('[Backoffice POS] RPC error, falling back to direct table inserts:', rpcErr.message);
+        }
+      } catch (e) {
+        console.warn('[Backoffice POS] RPC exception, falling back:', e);
+      }
 
-      // 2. Insert Line Items (Triggers PostgreSQL inventory deduction)
-      const lineItems = cart.map((i) => ({
-        order_id: order.id,
-        product_id: i.id,
-        product_name: i.name,
-        quantity: i.quantity,
-        unit_price: i.price,
-        cost_price: i.cost_price,
-        total: i.price * i.quantity,
-      }));
+      // 2. Fallback Direct Inserts if RPC is unavailable
+      if (!rpcExecuted) {
+        const { error: orderErr } = await supabase.from('orders').insert([orderPayload]);
+        if (orderErr) throw orderErr;
 
-      const { error: itemsErr } = await supabase.from('order_items').insert(lineItems);
-      if (itemsErr) throw itemsErr;
+        if (lineItems.length) {
+          const { error: itemsErr } = await supabase.from('order_items').insert(lineItems);
+          if (itemsErr) throw itemsErr;
+        }
 
-      // 3. Post Payment Record
-      await supabase.from('payments').insert([{
-        order_id: order.id,
-        payment_method: paymentMethod,
-        amount: grandTotal,
-      }]);
+        if (paymentsPayload.length) {
+          const { error: payErr } = await supabase.from('payments').insert(paymentsPayload);
+          if (payErr) throw payErr;
+        }
+      }
 
       Toast.success(`Receipt ${receiptNo} recorded.`);
 
-      // 4. Dispatch Receipt Printing via PrinterDriver
+      // 3. Dispatch Receipt Printing via PrinterDriver
       const slipPayload = {
         shopName: globalState.activeShop?.name || 'QuickSell POS',
         branchCode: globalState.activeShop?.branch_code || 'Main',
@@ -566,6 +627,7 @@ export async function mount(container) {
         unit_price: i.price,
         cashier_id: globalState.user?.id,
         reason: 'Entire counter ticket discarded by cashier',
+        created_at: new Date().toISOString()
       }));
 
       await supabase.from('cart_discard_logs').insert(discards);
@@ -611,5 +673,8 @@ export async function mount(container) {
   };
 
   await loadData();
-  return () => {};
+
+  return () => {
+    unsubs.forEach((unsub) => unsub && unsub());
+  };
 }

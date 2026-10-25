@@ -11,7 +11,7 @@ export async function mount(container) {
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <div>
-        </div>
+      </div>
       <div id="promotions-action-container"></div>
     </div>
 
@@ -40,6 +40,8 @@ export async function mount(container) {
   async function loadActiveTab() {
     const actionArea = document.getElementById('promotions-action-container');
     const tableArea = document.getElementById('promo-table-content');
+    if (!actionArea || !tableArea) return;
+
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching ${activeTab} data...</p>`;
 
     switch (activeTab) {
@@ -308,7 +310,12 @@ export async function mount(container) {
 
   // Bulk Price Change Modal
   async function openBulkPriceChangeModal() {
-    const { data: categories } = await supabase.from('categories').select('id, name');
+    let catQuery = supabase.from('categories').select('id, name');
+    if (globalState.activeShopId) {
+      catQuery = catQuery.or(`shop_id.eq.${globalState.activeShopId},shop_id.is.null`);
+    }
+    const { data: categories } = await catQuery;
+
     const catOpts = `<option value="">-- Apply to All Catalog Items --</option>` + (categories || []).map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
 
     Modal.open({
@@ -333,7 +340,7 @@ export async function mount(container) {
             </div>
           </div>
           <p style="font-size:0.775rem; color:var(--text-muted); margin-bottom:16px;">
-            This operation will recalculate retail prices across matching items.
+            This operation will recalculate retail prices across matching items and immediately sync them to all POS terminals.
           </p>
           <button type="submit" class="btn btn-accent btn-block">Confirm & Execute Price Change</button>
         </form>
@@ -353,11 +360,13 @@ export async function mount(container) {
         }
 
         let updatedCount = 0;
+        const nowIso = new Date().toISOString();
+
         for (const prod of productsToUpdate) {
           const newPrice = Math.round((Number(prod.retail_price) * multiplier) * 100) / 100;
           const { error: updErr } = await supabase
             .from('products')
-            .update({ retail_price: newPrice, updated_at: new Date().toISOString() })
+            .update({ retail_price: newPrice, updated_at: nowIso })
             .eq('id', prod.id);
 
           if (!updErr) updatedCount++;
@@ -370,6 +379,7 @@ export async function mount(container) {
           change_type: formData.change_type,
           percentage: parseFloat(formData.percentage),
           items_affected: updatedCount,
+          created_at: nowIso,
         }]);
 
         Toast.success(`Updated retail pricing on ${updatedCount} items.`);

@@ -7,6 +7,7 @@ import { DeviceTracker } from '../components/DeviceTracker.js';
 
 export async function mount(container) {
   let activeTab = 'sessions'; // 'sessions' | 'shops' | 'hardware' | 'receipt' | 'payments' | 'integrations'
+  let sessionSubscription = null;
   const myFingerprint = DeviceTracker.getFingerprint();
 
   container.innerHTML = `
@@ -41,9 +42,28 @@ export async function mount(container) {
     };
   });
 
+  // Subscribe to live device session heartbeats
+  if (globalState.activeShopId) {
+    sessionSubscription = supabase
+      .channel(`device_sessions_${globalState.activeShopId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'pos_device_sessions', filter: `shop_id=eq.${globalState.activeShopId}` },
+        () => {
+          if (activeTab === 'sessions') {
+            const tableArea = document.getElementById('settings-table-content');
+            if (tableArea) renderDeviceSessionsTable(tableArea);
+          }
+        }
+      )
+      .subscribe();
+  }
+
   async function loadActiveTab() {
     const actionArea = document.getElementById('settings-action-container');
     const tableArea = document.getElementById('settings-table-content');
+    if (!actionArea || !tableArea) return;
+
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching ${activeTab} data...</p>`;
 
     switch (activeTab) {
@@ -138,7 +158,7 @@ export async function mount(container) {
                 <strong>${val || 'Handheld Register'}</strong>
                 ${isCurrent ? '<span class="badge badge-teal" style="margin-left:6px;">THIS DEVICE</span>' : ''}
                 <div style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;">
-                  ID: ${row.device_fingerprint.slice(0, 16)}...
+                  ID: ${row.device_fingerprint ? row.device_fingerprint.slice(0, 16) : '-'}...
                 </div>
               </div>
             `;
@@ -183,7 +203,6 @@ export async function mount(container) {
       },
     });
 
-    // Replace the default "manage" text on the action buttons with "Revoke/Allow"
     target.querySelectorAll('button[data-row-id]').forEach((btn) => {
       const item = sessions.find((s) => s.id === btn.dataset.rowId);
       if (item) {
@@ -203,7 +222,7 @@ export async function mount(container) {
 
     const { error } = await supabase
       .from('pos_device_sessions')
-      .update({ is_active: nextState })
+      .update({ is_active: nextState, updated_at: new Date().toISOString() })
       .eq('id', device.id);
 
     if (error) {
@@ -233,9 +252,9 @@ export async function mount(container) {
           render: (val, row) => `<strong>${val}</strong> ${globalState.activeShopId === row.id ? '<span class="badge badge-teal">ACTIVE</span>' : ''}` 
         },
         { label: 'Branch Code', key: 'branch_code', render: (code) => `<code>${code || '-'}</code>` },
-        { label: 'Phone', key: 'phone' },
+        { label: 'Phone', key: 'phone', render: (p) => p || '-' },
         { label: 'Base Currency', key: 'currency' },
-        { label: 'Location Address', key: 'address' },
+        { label: 'Location Address', key: 'address', render: (a) => a || '-' },
       ],
       data: shops || [],
       onAction: (action, id) => {
@@ -267,8 +286,8 @@ export async function mount(container) {
       columns: [
         { label: 'Printer Model', key: 'device_name', render: (v) => `<strong>${v}</strong>` },
         { label: 'Identifier Code', key: 'device_code', render: (c) => `<code>${c}</code>` },
-        { label: 'Interface', key: 'printer_type', render: (t) => t.toUpperCase() },
-        { label: 'Paper Width', key: 'paper_width', render: (w) => `${w}mm` },
+        { label: 'Interface', key: 'printer_type', render: (t) => (t || 'USB').toUpperCase() },
+        { label: 'Paper Width', key: 'paper_width', render: (w) => `${w || 80}mm` },
         { label: 'Printer IP / Host', key: 'printer_ip', render: (ip) => ip || 'Local host' },
         { label: 'Status', key: 'is_active', render: (act) => act ? '<span class="badge badge-teal">ONLINE</span>' : '<span class="badge">OFFLINE</span>' },
       ],
@@ -292,7 +311,7 @@ export async function mount(container) {
 
     if (!template) {
       template = {
-        business_name: 'QuickSell POS Store',
+        business_name: globalState.activeShop?.name || 'QuickSell POS Store',
         tax_pin: 'P051000000X',
         header_text: 'Thank you for shopping with us!',
         footer_text: 'Goods once sold are not returnable without a valid receipt.',
@@ -357,7 +376,7 @@ export async function mount(container) {
             </div>
           </div>
           <div style="text-align:right; margin-bottom:12px;">
-            <div style="font-size:0.9rem; font-weight:bold;">TOTAL: 450.00 KES</div>
+            <div style="font-size:0.9rem; font-weight:bold;">TOTAL: 450.00 ${globalState.preferences.currency || 'KES'}</div>
             <div>CASH TENDERED: 500.00</div>
             <div>CHANGE: 50.00</div>
           </div>
@@ -427,8 +446,15 @@ export async function mount(container) {
   // 6. Developer Integrations
   // =========================================================================
   async function renderIntegrationsView(target) {
-    const { data: keys } = await supabase.from('developer_api_keys').select('*').order('created_at');
-    const { data: hooks } = await supabase.from('webhook_endpoints').select('*').order('created_at');
+    let keyQuery = supabase.from('developer_api_keys').select('*').order('created_at');
+    let hookQuery = supabase.from('webhook_endpoints').select('*').order('created_at');
+
+    if (globalState.activeShopId) {
+      keyQuery = keyQuery.eq('shop_id', globalState.activeShopId);
+      hookQuery = hookQuery.eq('shop_id', globalState.activeShopId);
+    }
+
+    const [{ data: keys }, { data: hooks }] = await Promise.all([keyQuery, hookQuery]);
 
     target.innerHTML = `
       <div style="padding:20px;">
@@ -447,7 +473,7 @@ export async function mount(container) {
       targetId: 'api-keys-table-wrap',
       columns: [
         { label: 'Key Identifier', key: 'label', render: (l) => `<strong>${l}</strong>` },
-        { label: 'Token Key', key: 'api_key', render: (k) => `<code>${k.slice(0, 10)}...${k.slice(-4)}</code>` },
+        { label: 'Token Key', key: 'api_key', render: (k) => `<code>${k ? `${k.slice(0, 10)}...${k.slice(-4)}` : '-'}</code>` },
         { label: 'Created At', key: 'created_at', render: (d) => new Date(d).toLocaleDateString() },
       ],
       data: keys || [],
@@ -686,7 +712,10 @@ export async function mount(container) {
   }
 
   await loadActiveTab();
+
   return () => {
-    // Teardown logic
+    if (sessionSubscription && supabase) {
+      supabase.removeChannel(sessionSubscription);
+    }
   };
 }

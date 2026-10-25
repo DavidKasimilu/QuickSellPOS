@@ -10,7 +10,6 @@ export async function mount(container) {
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-
       <div id="employees-action-container"></div>
     </div>
 
@@ -41,6 +40,8 @@ export async function mount(container) {
   async function loadActiveTab() {
     const actionArea = document.getElementById('employees-action-container');
     const tableArea = document.getElementById('emp-table-content');
+    if (!actionArea || !tableArea) return;
+
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching ${activeTab} records...</p>`;
 
     switch (activeTab) {
@@ -104,7 +105,7 @@ export async function mount(container) {
         { 
           label: 'Role', 
           key: 'role', 
-          render: (r) => `<span class="badge ${r === 'admin' ? 'badge-teal' : ''}">${r.toUpperCase()}</span>` 
+          render: (r) => `<span class="badge ${r === 'admin' ? 'badge-teal' : ''}">${(r || 'staff').toUpperCase()}</span>` 
         },
         { label: 'Assigned Shop', key: 'shops', render: (s) => s?.name || 'All Locations' },
         { label: 'Commission Rate', key: 'commission_rate', render: (c) => `${c || 0}%` },
@@ -131,7 +132,6 @@ export async function mount(container) {
       return;
     }
 
-    // Default template fallbacks if not yet initialized in database
     const rolesList = data?.length ? data : [
       { id: '1', role: 'admin', can_void_receipts: true, can_apply_manual_discounts: true, can_view_cost_prices: true, can_adjust_inventory: true },
       { id: '2', role: 'manager', can_void_receipts: true, can_apply_manual_discounts: true, can_view_cost_prices: true, can_adjust_inventory: true },
@@ -142,7 +142,7 @@ export async function mount(container) {
     renderDataTable({
       targetId: 'emp-table-content',
       columns: [
-        { label: 'Role Tier', key: 'role', render: (r) => `<strong>${r.toUpperCase()}</strong>` },
+        { label: 'Role Tier', key: 'role', render: (r) => `<strong>${(r || '').toUpperCase()}</strong>` },
         { label: 'Void Receipts', key: 'can_void_receipts', render: (v) => v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked' },
         { label: 'Manual Discounts', key: 'can_apply_manual_discounts', render: (v) => v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked' },
         { label: 'View COGS / Costs', key: 'can_view_cost_prices', render: (v) => v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked' },
@@ -191,8 +191,15 @@ export async function mount(container) {
   // 4. Staff Commissions Report
   // =========================================================================
   async function renderCommissionsReport(target) {
-    const { data: staff } = await supabase.from('profiles').select('id, full_name, email, commission_rate');
-    const { data: orders } = await supabase.from('orders').select('cashier_id, total').eq('order_status', 'completed');
+    let profQuery = supabase.from('profiles').select('id, full_name, email, commission_rate');
+    let ordQuery = supabase.from('orders').select('cashier_id, total').eq('order_status', 'completed');
+
+    if (globalState.activeShopId) {
+      profQuery = profQuery.eq('shop_id', globalState.activeShopId);
+      ordQuery = ordQuery.eq('shop_id', globalState.activeShopId);
+    }
+
+    const [{ data: staff }, { data: orders }] = await Promise.all([profQuery, ordQuery]);
 
     const report = (staff || []).map((member) => {
       const sales = (orders || [])
@@ -246,7 +253,7 @@ export async function mount(container) {
         { 
           label: 'Event Type', 
           key: 'event_type', 
-          render: (ev) => `<span class="badge ${ev === 'login' ? 'badge-teal' : ''}">${ev.toUpperCase()}</span>` 
+          render: (ev) => `<span class="badge ${ev === 'login' ? 'badge-teal' : ''}">${(ev || '').toUpperCase()}</span>` 
         },
         { label: 'Timestamp', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
         { label: 'Details', key: 'details', render: (det) => det ? JSON.stringify(det) : '-' },
@@ -304,6 +311,7 @@ export async function mount(container) {
             shop_id: formData.shop_id || null,
             commission_rate: parseFloat(formData.commission_rate) || 0,
             is_active: formData.is_active === 'on',
+            updated_at: new Date().toISOString(),
           })
           .eq('id', member.id);
 
@@ -353,6 +361,7 @@ export async function mount(container) {
           can_apply_manual_discounts: formData.can_apply_manual_discounts === 'on',
           can_view_cost_prices: formData.can_view_cost_prices === 'on',
           can_adjust_inventory: formData.can_adjust_inventory === 'on',
+          updated_at: new Date().toISOString(),
         };
 
         const { error } = await supabase
