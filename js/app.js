@@ -3,8 +3,10 @@ import { globalState } from './state.js';
 import { navigate } from './router.js';
 import { Toast } from './components/Toast.js';
 import { DeviceTracker } from './components/DeviceTracker.js';
+import { supabase } from './supabaseClient.js';
 
 let pendingAuthEmail = '';
+let realtimeChannel = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
   // 1. Initial Icon Rendering
@@ -28,19 +30,110 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     const sessionState = await Auth.syncSession();
     if (!sessionState?.user) {
+      tearDownRealtime();
       DeviceTracker.stopTracking();
       showAuthOverlay(true);
     } else {
       showAuthOverlay(false);
       DeviceTracker.startTracking();
+      
+      const activeShopId = globalState.activeShopId || sessionState.profile?.shop_id;
+      if (activeShopId) {
+        setupGlobalRealtime(activeShopId);
+      }
+      
       navigate(); // Mount initial hash route
     }
   } catch (err) {
     console.error('Session bootstrap failed:', err);
+    tearDownRealtime();
     DeviceTracker.stopTracking();
     showAuthOverlay(true);
   }
 });
+
+// =========================================================================
+// Supabase Real-Time Channel Synchronization
+// =========================================================================
+function setupGlobalRealtime(shopId) {
+  if (!supabase || !shopId) return;
+
+  tearDownRealtime();
+
+  realtimeChannel = supabase
+    .channel(`backoffice_shop_${shopId}`)
+    // Products
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'products', filter: `shop_id=eq.${shopId}` },
+      (payload) => {
+        if (payload.eventType === 'DELETE') {
+          globalState.removeEntity('products', payload.old.id);
+        } else {
+          globalState.upsertEntity('products', payload.new);
+        }
+      }
+    )
+    // Categories
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'categories', filter: `shop_id=eq.${shopId}` },
+      (payload) => {
+        if (payload.eventType === 'DELETE') {
+          globalState.removeEntity('categories', payload.old.id);
+        } else {
+          globalState.upsertEntity('categories', payload.new);
+        }
+      }
+    )
+    // Inventory adjustments & Mobile POS sales decrements
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'inventory', filter: `shop_id=eq.${shopId}` },
+      (payload) => {
+        globalState.upsertEntity('inventory', payload.new);
+      }
+    )
+    // Incoming Orders from Mobile POS
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'orders', filter: `shop_id=eq.${shopId}` },
+      (payload) => {
+        globalState.upsertEntity('orders', payload.new);
+        Toast.info(`Incoming sale recorded: #${payload.new.receipt_no}`);
+      }
+    )
+    // Order updates / voids
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'orders', filter: `shop_id=eq.${shopId}` },
+      (payload) => {
+        globalState.upsertEntity('orders', payload.new);
+      }
+    )
+    // Customers created or updated via counter
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'customers', filter: `shop_id=eq.${shopId}` },
+      (payload) => {
+        if (payload.eventType === 'DELETE') {
+          globalState.removeEntity('customers', payload.old.id);
+        } else {
+          globalState.upsertEntity('customers', payload.new);
+        }
+      }
+    )
+    .subscribe((status) => {
+      console.log(`[Backoffice Realtime] Status: ${status}`);
+    });
+}
+
+function tearDownRealtime() {
+  if (realtimeChannel && supabase) {
+    supabase.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+}
 
 // =========================================================================
 // UI Authentication Overlays & Form Switching
@@ -131,6 +224,12 @@ function bindAuthActions() {
       await Auth.signIn(email, password);
       DeviceTracker.startTracking();
       showAuthOverlay(false);
+
+      const activeShopId = globalState.activeShopId || globalState.profile?.shop_id;
+      if (activeShopId) {
+        setupGlobalRealtime(activeShopId);
+      }
+
       Toast.success('Signed in successfully.');
       navigate();
     } catch (err) {
@@ -185,6 +284,12 @@ function bindAuthActions() {
       await Auth.verifySignUpOTP(pendingAuthEmail, token);
       DeviceTracker.startTracking();
       showAuthOverlay(false);
+
+      const activeShopId = globalState.activeShopId || globalState.profile?.shop_id;
+      if (activeShopId) {
+        setupGlobalRealtime(activeShopId);
+      }
+
       Toast.success('Account successfully verified.');
       navigate();
     } catch (err) {
@@ -357,6 +462,7 @@ function bindGlobalNavActions() {
   if (logoutBtn) {
     logoutBtn.onclick = async () => {
       if (confirm('Are you sure you want to log out of QuickSell POS?')) {
+        tearDownRealtime();
         DeviceTracker.stopTracking();
         await Auth.signOut();
       }

@@ -9,11 +9,16 @@ export async function mount(container) {
   const currency = globalState.preferences.currency || 'KES';
   const filterDate = globalState.filterDate || new Date().toISOString().split('T')[0];
   let activeTab = 'receipts'; // 'receipts' | 'shifts' | 'hourly-trends' | 'service-types' | 'payments' | 'categories' | 'suspicious'
+  let unsubs = [];
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <div>
-     </div>
+        <span class="live-indicator" style="font-size:0.75rem; color:var(--teal-600); display:inline-flex; align-items:center; gap:4px;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal-600);"></span>
+          Live Sales Stream Active
+        </span>
+      </div>
       <div id="sales-action-container"></div>
     </div>
 
@@ -43,9 +48,23 @@ export async function mount(container) {
     };
   });
 
+  // Reactive state listener for real-time mobile order insertions
+  unsubs.push(
+    globalState.subscribeKey('orders', () => {
+      loadActiveTab();
+    })
+  );
+  unsubs.push(
+    globalState.subscribeKey('payments', () => {
+      if (activeTab === 'payments') loadActiveTab();
+    })
+  );
+
   async function loadActiveTab() {
     const actionArea = document.getElementById('sales-action-container');
     const tableArea = document.getElementById('sales-table-content');
+    if (!actionArea || !tableArea) return;
+
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching ${activeTab} data...</p>`;
 
     switch (activeTab) {
@@ -129,9 +148,10 @@ export async function mount(container) {
         {
           label: 'Status',
           key: 'order_status',
-          render: (st) => {
+          render: (st, row) => {
             const isComp = st === 'completed';
-            return `<span class="badge ${isComp ? 'badge-teal' : ''}">${st.toUpperCase()}</span>`;
+            const offlineTag = row.synced_from_offline ? '<span class="badge" style="background:#fef3c7; color:#d97706; margin-left:4px;">OFFLINE</span>' : '';
+            return `<span class="badge ${isComp ? 'badge-teal' : ''}">${st.toUpperCase()}</span>${offlineTag}`;
           },
         },
       ],
@@ -279,7 +299,10 @@ export async function mount(container) {
   // 5. Payment Methods Breakdown
   // =========================================================================
   async function renderPaymentBreakdown(target) {
-    const { data: payments, error } = await supabase.from('payments').select('amount, payment_method');
+    let query = supabase.from('payments').select('amount, payment_method, orders!inner(shop_id)');
+    if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
+
+    const { data: payments, error } = await query;
     if (error) {
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
@@ -310,10 +333,13 @@ export async function mount(container) {
   // 6. Sales by Category
   // =========================================================================
   async function renderCategoryBreakdown(target) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('order_items')
-      .select('quantity, total, products(categories(name))');
+      .select('quantity, total, orders!inner(shop_id), products(categories(name))');
 
+    if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
+
+    const { data, error } = await query;
     if (error) {
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
@@ -349,12 +375,15 @@ export async function mount(container) {
   // 7. Suspicious Reports & Open Cart Discard Audits
   // =========================================================================
   async function renderSuspiciousAudit(target) {
-    const { data: discards, error } = await supabase
+    let query = supabase
       .from('cart_discard_logs')
       .select('*, profiles(full_name)')
       .order('created_at', { ascending: false })
       .limit(50);
 
+    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+
+    const { data: discards, error } = await query;
     if (error) {
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
@@ -471,6 +500,7 @@ export async function mount(container) {
           staff_id: globalState.user?.id,
           opening_cash: parseFloat(fd.opening_cash) || 0,
           status: 'open',
+          opened_at: new Date().toISOString()
         }]);
         Toast.success('Shift opened.');
         await loadActiveTab();
@@ -479,5 +509,8 @@ export async function mount(container) {
   }
 
   await loadActiveTab();
-  return () => {};
+
+  return () => {
+    unsubs.forEach((unsub) => unsub && unsub());
+  };
 }

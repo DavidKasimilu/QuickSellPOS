@@ -8,6 +8,7 @@ import { BarcodeGenerator } from '../components/BarcodeGenerator.js';
 export async function mount(container) {
   const currency = globalState.preferences.currency || 'KES';
   let activeTab = 'products'; // 'products' | 'categories' | 'modifiers' | 'uom'
+  let unsubs = [];
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
@@ -39,9 +40,23 @@ export async function mount(container) {
     };
   });
 
+  // Reactive state listeners for real-time mobile sync updates
+  unsubs.push(
+    globalState.subscribeKey('products', () => {
+      if (activeTab === 'products') loadActiveTab();
+    })
+  );
+  unsubs.push(
+    globalState.subscribeKey('categories', () => {
+      if (activeTab === 'categories') loadActiveTab();
+    })
+  );
+
   async function loadActiveTab() {
     const actionArea = document.getElementById('catalog-action-container');
     const tableArea = document.getElementById('catalog-table-content');
+    if (!actionArea || !tableArea) return;
+
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching ${activeTab} data...</p>`;
 
     switch (activeTab) {
@@ -108,8 +123,8 @@ export async function mount(container) {
         { label: 'Item Name', key: 'name', render: (n) => `<strong>${n}</strong>` },
         { label: 'Barcode / SKU', key: 'barcode', render: (b, row) => `<code>${b || row.sku || '-'}</code>` },
         { label: 'Category', key: 'categories', render: (c) => c?.name || 'General' },
-        { label: 'Retail Price', key: 'retail_price', render: (v) => `${Number(v).toLocaleString()}${currency}` },
-        { label: 'Unit Cost', key: 'cost_price', render: (v) => `${Number(v).toLocaleString()}${currency}` },
+        { label: 'Retail Price', key: 'retail_price', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
+        { label: 'Unit Cost', key: 'cost_price', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
         {
           label: 'Tools',
           key: 'id',
@@ -171,7 +186,7 @@ export async function mount(container) {
 
     const groupRows = allGroups.map((g) => {
       const isChecked = mappedIds.has(g.id);
-      const modItems = (g.modifiers || []).map((m) => `${m.name} (+${m.price_delta})`).join(', ') || 'No items';
+      const modItems = (g.modifiers || []).map((m) => `${m.name} (+${m.price_delta || m.price_impact || 0})`).join(', ') || 'No items';
       return `
         <div style="padding:10px; border:1px solid var(--border-subtle); border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
           <div>
@@ -181,7 +196,7 @@ export async function mount(container) {
             </label>
             <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-left:22px;">${modItems}</span>
           </div>
-          <span class="badge">${g.selection_type.toUpperCase()}</span>
+          <span class="badge">${(g.selection_type || 'single').toUpperCase()}</span>
         </div>
       `;
     }).join('');
@@ -263,6 +278,10 @@ export async function mount(container) {
   // =========================================================================
   async function renderCategoriesTable(target) {
     let query = supabase.from('categories').select('*').order('name');
+    if (globalState.activeShopId) {
+      query = query.or(`shop_id.eq.${globalState.activeShopId},shop_id.is.null`);
+    }
+
     const { data: cats, error } = await query;
 
     if (error) {
@@ -288,7 +307,10 @@ export async function mount(container) {
   // 3. Modifiers Table
   // =========================================================================
   async function renderModifiersTable(target) {
-    const { data: groups, error } = await supabase.from('modifier_groups').select('*, modifiers(*)').order('name');
+    let query = supabase.from('modifier_groups').select('*, modifiers(*)').order('name');
+    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+
+    const { data: groups, error } = await query;
     if (error) {
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
@@ -298,11 +320,11 @@ export async function mount(container) {
       targetId: 'catalog-table-content',
       columns: [
         { label: 'Modifier Group', key: 'name', render: (v) => `<strong>${v}</strong>` },
-        { label: 'Selection Type', key: 'selection_type', render: (s) => `<span class="badge">${s.toUpperCase()}</span>` },
+        { label: 'Selection Type', key: 'selection_type', render: (s) => `<span class="badge">${(s || 'single').toUpperCase()}</span>` },
         { 
           label: 'Included Options', 
           key: 'modifiers', 
-          render: (items) => (items || []).map((m) => `${m.name} (+${Number(m.price_delta).toLocaleString()})`).join(', ') || 'No options'
+          render: (items) => (items || []).map((m) => `${m.name} (+${Number(m.price_delta || m.price_impact || 0).toLocaleString()})`).join(', ') || 'No options'
         },
       ],
       data: groups || [],
@@ -317,7 +339,10 @@ export async function mount(container) {
   // 4. Units of Measurement (UOM) Table
   // =========================================================================
   async function renderUOMTable(target) {
-    const { data: uoms, error } = await supabase.from('uom').select('*').order('name');
+    let query = supabase.from('measurement_units').select('*').order('name');
+    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+
+    const { data: uoms, error } = await query;
     if (error) {
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
@@ -327,7 +352,7 @@ export async function mount(container) {
       targetId: 'catalog-table-content',
       columns: [
         { label: 'Unit Name', key: 'name', render: (v) => `<strong>${v}</strong>` },
-        { label: 'Short Code / Symbol', key: 'code', render: (c) => `<code>${c}</code>` },
+        { label: 'Short Code / Symbol', key: 'short_code', render: (c) => `<code>${c || '-'}</code>` },
       ],
       data: uoms || [],
       onAction: (action, id) => {
@@ -342,7 +367,12 @@ export async function mount(container) {
   // =========================================================================
   async function openProductModal(prod = null) {
     const isEdit = !!prod;
-    const { data: categories } = await supabase.from('categories').select('id, name');
+    let catQuery = supabase.from('categories').select('id, name');
+    if (globalState.activeShopId) {
+      catQuery = catQuery.or(`shop_id.eq.${globalState.activeShopId},shop_id.is.null`);
+    }
+    const { data: categories } = await catQuery;
+
     const catOpts = `<option value="">-- No Category --</option>` + (categories || []).map((c) => 
       `<option value="${c.id}" ${prod?.category_id === c.id ? 'selected' : ''}>${c.name}</option>`
     ).join('');
@@ -385,6 +415,12 @@ export async function mount(container) {
               <input type="number" step="0.1" name="tax_rate" value="${prod?.tax_rate || 0}" />
             </div>
           </div>
+          ${!isEdit ? `
+          <div class="form-group">
+            <label>Initial Stock on Hand</label>
+            <input type="number" step="1" name="initial_stock" value="0" placeholder="0" />
+          </div>
+          ` : ''}
           <div class="form-group">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
               <input type="checkbox" name="track_inventory" ${prod?.track_inventory !== false ? 'checked' : ''} />
@@ -395,6 +431,7 @@ export async function mount(container) {
         </form>
       `,
       onSubmit: async (fd) => {
+        const nowIso = new Date().toISOString();
         const payload = {
           shop_id: globalState.activeShopId,
           name: fd.name,
@@ -405,17 +442,42 @@ export async function mount(container) {
           category_id: fd.category_id || null,
           tax_rate: parseFloat(fd.tax_rate) || 0,
           track_inventory: fd.track_inventory === 'on',
+          is_active: true,
+          updated_at: nowIso,
         };
 
-        const { error } = isEdit
-          ? await supabase.from('products').update(payload).eq('id', prod.id)
-          : await supabase.from('products').insert([payload]);
+        if (isEdit) {
+          const { error } = await supabase.from('products').update(payload).eq('id', prod.id);
+          if (error) {
+            Toast.error(error.message);
+            return;
+          }
+        } else {
+          const newProdId = crypto.randomUUID();
+          payload.id = newProdId;
+          payload.created_at = nowIso;
 
-        if (error) Toast.error(error.message);
-        else {
-          Toast.success('Product saved.');
-          await loadActiveTab();
+          const { error: prodErr } = await supabase.from('products').insert([payload]);
+          if (prodErr) {
+            Toast.error(prodErr.message);
+            return;
+          }
+
+          // Provision baseline inventory record automatically for immediate mobile POS sync
+          const initQty = parseFloat(fd.initial_stock) || 0;
+          if (globalState.activeShopId) {
+            await supabase.from('inventory').insert([{
+              shop_id: globalState.activeShopId,
+              product_id: newProdId,
+              quantity_on_hand: initQty,
+              min_stock_level: 5.0,
+              updated_at: nowIso
+            }]);
+          }
         }
+
+        Toast.success('Product saved.');
+        await loadActiveTab();
       },
     });
   }
@@ -438,7 +500,14 @@ export async function mount(container) {
         </form>
       `,
       onSubmit: async (fd) => {
-        const payload = { name: fd.name, description: fd.description };
+        const nowIso = new Date().toISOString();
+        const payload = {
+          shop_id: globalState.activeShopId,
+          name: fd.name,
+          description: fd.description,
+          updated_at: nowIso
+        };
+
         const { error } = isEdit
           ? await supabase.from('categories').update(payload).eq('id', cat.id)
           : await supabase.from('categories').insert([payload]);
@@ -505,9 +574,10 @@ export async function mount(container) {
       `,
       onSubmit: async (fd) => {
         const { error } = await supabase.from('modifiers').insert([{
+          shop_id: globalState.activeShopId,
           group_id: group.id,
           name: fd.name,
-          price_delta: parseFloat(fd.price_delta) || 0,
+          price_impact: parseFloat(fd.price_delta) || 0,
         }]);
 
         if (error) Toast.error(error.message);
@@ -531,16 +601,21 @@ export async function mount(container) {
           </div>
           <div class="form-group">
             <label>Unit Code / Symbol</label>
-            <input type="text" name="code" required value="${uom?.code || ''}" placeholder="kg, l, pcs" />
+            <input type="text" name="short_code" required value="${uom?.short_code || uom?.code || ''}" placeholder="kg, l, pcs" />
           </div>
           <button type="submit" class="btn btn-teal-primary btn-block">${isEdit ? 'Update UOM' : 'Save UOM'}</button>
         </form>
       `,
       onSubmit: async (fd) => {
-        const payload = { name: fd.name, code: fd.code };
+        const payload = {
+          shop_id: globalState.activeShopId,
+          name: fd.name,
+          short_code: fd.short_code
+        };
+
         const { error } = isEdit
-          ? await supabase.from('uom').update(payload).eq('id', uom.id)
-          : await supabase.from('uom').insert([payload]);
+          ? await supabase.from('measurement_units').update(payload).eq('id', uom.id)
+          : await supabase.from('measurement_units').insert([payload]);
 
         if (error) Toast.error(error.message);
         else {
@@ -552,5 +627,9 @@ export async function mount(container) {
   }
 
   await loadActiveTab();
-  return () => {};
+
+  // Return unmount cleaner
+  return () => {
+    unsubs.forEach((unsub) => unsub && unsub());
+  };
 }

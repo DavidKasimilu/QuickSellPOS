@@ -4,6 +4,7 @@ import { globalState } from '../state.js';
 export async function mount(container) {
   const currency = globalState.preferences.currency || 'KES';
   const filterDate = globalState.filterDate || new Date().toISOString().split('T')[0];
+  let unsubs = [];
 
   container.innerHTML = `
     <div class="kpi-grid">
@@ -91,6 +92,13 @@ export async function mount(container) {
     </div>
   `;
 
+  // Reactive listener: recalculates metrics immediately when mobile POS orders sync
+  unsubs.push(
+    globalState.subscribeKey('orders', () => {
+      loadMetrics();
+    })
+  );
+
   async function loadMetrics() {
     const startOfDay = `${filterDate}T00:00:00.000Z`;
     const endOfDay = `${filterDate}T23:59:59.999Z`;
@@ -139,18 +147,27 @@ export async function mount(container) {
 
     const fmt = (num) => `${Number(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 
-    document.getElementById('val-gross-sales').textContent = fmt(gross);
-    document.getElementById('val-net-sales').textContent = fmt(net);
-    document.getElementById('val-cogs').textContent = fmt(cogs);
-    document.getElementById('val-gross-profit').textContent = fmt(profit);
-    document.getElementById('val-discounts').textContent = fmt(discounts);
-    document.getElementById('val-refunds').textContent = fmt(refunds);
+    const grossEl = document.getElementById('val-gross-sales');
+    const netEl = document.getElementById('val-net-sales');
+    const cogsEl = document.getElementById('val-cogs');
+    const profitEl = document.getElementById('val-gross-profit');
+    const discEl = document.getElementById('val-discounts');
+    const refEl = document.getElementById('val-refunds');
+
+    if (grossEl) grossEl.textContent = fmt(gross);
+    if (netEl) netEl.textContent = fmt(net);
+    if (cogsEl) cogsEl.textContent = fmt(cogs);
+    if (profitEl) profitEl.textContent = fmt(profit);
+    if (discEl) discEl.textContent = fmt(discounts);
+    if (refEl) refEl.textContent = fmt(refunds);
 
     renderTrendVisualization(orders || []);
   }
 
   function renderTrendVisualization(orders) {
     const container = document.getElementById('sales-chart-body');
+    if (!container) return;
+
     if (!orders.length) {
       container.innerHTML = `<div class="chart-placeholder"><p>No orders recorded for ${filterDate}</p></div>`;
       return;
@@ -171,6 +188,12 @@ export async function mount(container) {
 
   await loadMetrics();
 
-  // State unsubscribe hook
-  return () => {};
+  if (window.lucide) {
+    window.lucide.createIcons({ root: container });
+  }
+
+  // Clean unmount hook
+  return () => {
+    unsubs.forEach((unsub) => unsub && unsub());
+  };
 }

@@ -7,11 +7,16 @@ import { Toast } from '../components/Toast.js';
 export async function mount(container) {
   const currency = globalState.preferences.currency || 'KES';
   let activeTab = 'stock'; // 'stock' | 'valuation' | 'expiry' | 'audits' | 'assemblies' | 'po' | 'grn' | 'prn'
+  let unsubs = [];
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <div>
-        </div>
+        <span class="live-indicator" style="font-size:0.75rem; color:var(--teal-600); display:inline-flex; align-items:center; gap:4px;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal-600);"></span>
+          Live Stock Stream Active
+        </span>
+      </div>
       <div id="inv-action-container"></div>
     </div>
 
@@ -42,9 +47,20 @@ export async function mount(container) {
     };
   });
 
+  // Reactive state listener for real-time mobile checkout deductions
+  unsubs.push(
+    globalState.subscribeKey('inventory', () => {
+      if (activeTab === 'stock' || activeTab === 'valuation') {
+        loadActiveTab();
+      }
+    })
+  );
+
   async function loadActiveTab() {
     const actionArea = document.getElementById('inv-action-container');
     const tableArea = document.getElementById('inv-table-content');
+    if (!actionArea || !tableArea) return;
+
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching ${activeTab} records...</p>`;
 
     switch (activeTab) {
@@ -271,60 +287,66 @@ export async function mount(container) {
   }
 
   function openBatchModal() {
-    supabase.from('products').select('id, name').then(({ data: prods }) => {
-      supabase.from('suppliers').select('id, name').then(({ data: supps }) => {
-        const prodOpts = (prods || []).map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
-        const suppOpts = `<option value="">-- Optional Supplier --</option>` + (supps || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+    let pQuery = supabase.from('products').select('id, name');
+    let sQuery = supabase.from('suppliers').select('id, name');
 
-        Modal.open({
-          title: 'Register Perishable Inventory Batch',
-          content: `
-            <form id="form-batch-save">
-              <div class="form-group">
-                <label>Target Product</label>
-                <select name="product_id" required>${prodOpts}</select>
-              </div>
-              <div class="form-row" style="display:flex; gap:12px;">
-                <div class="form-group" style="flex:1;">
-                  <label>Batch / Lot #</label>
-                  <input type="text" name="batch_number" required value="BATCH-${Date.now().toString().slice(-5)}" />
-                </div>
-                <div class="form-group" style="flex:1;">
-                  <label>Quantity Received</label>
-                  <input type="number" step="1" min="1" name="quantity_received" value="10" required />
-                </div>
-              </div>
-              <div class="form-row" style="display:flex; gap:12px;">
-                <div class="form-group" style="flex:1;">
-                  <label>Perishable Expiry Date</label>
-                  <input type="date" name="expiry_date" required />
-                </div>
-                <div class="form-group" style="flex:1;">
-                  <label>Supplier Vendor</label>
-                  <select name="supplier_id">${suppOpts}</select>
-                </div>
-              </div>
-              <button type="submit" class="btn btn-teal-primary btn-block">Log Batch</button>
-            </form>
-          `,
-          onSubmit: async (fd) => {
-            const { error } = await supabase.from('inventory_batches').insert([{
-              shop_id: globalState.activeShopId,
-              product_id: fd.product_id,
-              batch_number: fd.batch_number,
-              quantity_received: parseFloat(fd.quantity_received),
-              quantity_remaining: parseFloat(fd.quantity_received),
-              expiry_date: fd.expiry_date,
-              supplier_id: fd.supplier_id || null,
-            }]);
+    if (globalState.activeShopId) {
+      pQuery = pQuery.eq('shop_id', globalState.activeShopId);
+      sQuery = sQuery.eq('shop_id', globalState.activeShopId);
+    }
 
-            if (error) Toast.error(error.message);
-            else {
-              Toast.success('Perishable batch logged.');
-              await loadActiveTab();
-            }
-          },
-        });
+    Promise.all([pQuery, sQuery]).then(([{ data: prods }, { data: supps }]) => {
+      const prodOpts = (prods || []).map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+      const suppOpts = `<option value="">-- Optional Supplier --</option>` + (supps || []).map((s) => `<option value="${s.id}">${s.name}</option>`).join('');
+
+      Modal.open({
+        title: 'Register Perishable Inventory Batch',
+        content: `
+          <form id="form-batch-save">
+            <div class="form-group">
+              <label>Target Product</label>
+              <select name="product_id" required>${prodOpts}</select>
+            </div>
+            <div class="form-row" style="display:flex; gap:12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Batch / Lot #</label>
+                <input type="text" name="batch_number" required value="BATCH-${Date.now().toString().slice(-5)}" />
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Quantity Received</label>
+                <input type="number" step="1" min="1" name="quantity_received" value="10" required />
+              </div>
+            </div>
+            <div class="form-row" style="display:flex; gap:12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Perishable Expiry Date</label>
+                <input type="date" name="expiry_date" required />
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Supplier Vendor</label>
+                <select name="supplier_id">${suppOpts}</select>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-teal-primary btn-block">Log Batch</button>
+          </form>
+        `,
+        onSubmit: async (fd) => {
+          const { error } = await supabase.from('inventory_batches').insert([{
+            shop_id: globalState.activeShopId,
+            product_id: fd.product_id,
+            batch_number: fd.batch_number,
+            quantity_received: parseFloat(fd.quantity_received),
+            quantity_remaining: parseFloat(fd.quantity_received),
+            expiry_date: fd.expiry_date,
+            supplier_id: fd.supplier_id || null,
+          }]);
+
+          if (error) Toast.error(error.message);
+          else {
+            Toast.success('Perishable batch logged.');
+            await loadActiveTab();
+          }
+        },
       });
     });
   }
@@ -406,6 +428,7 @@ export async function mount(container) {
       `,
       onSubmit: async (fd) => {
         const countSize = parseInt(fd.count_size, 10);
+        const nowIso = new Date().toISOString();
 
         const { data: audit, error: auditErr } = await supabase
           .from('inventory_audits')
@@ -415,7 +438,7 @@ export async function mount(container) {
             initiated_by: globalState.user?.id,
             status: 'completed',
             notes: fd.notes,
-            completed_at: new Date().toISOString(),
+            completed_at: nowIso,
           }])
           .select()
           .single();
@@ -442,8 +465,18 @@ export async function mount(container) {
           if (discrepancy !== 0) {
             await supabase.from('inventory').update({
               quantity_on_hand: countedQty,
-              updated_at: new Date().toISOString(),
+              updated_at: nowIso,
             }).eq('shop_id', globalState.activeShopId).eq('product_id', prodId);
+
+            // Log adjustment movement
+            await supabase.from('inventory_transactions').insert([{
+              shop_id: globalState.activeShopId,
+              product_id: prodId,
+              transaction_type: 'stocktake_adjustment',
+              quantity: discrepancy,
+              reference: `Audit: ${auditNum}`,
+              created_at: nowIso
+            }]);
           }
         }
 
@@ -509,7 +542,10 @@ export async function mount(container) {
   }
 
   async function openRecipeBuilderModal() {
-    const { data: prods } = await supabase.from('products').select('id, name');
+    let pQuery = supabase.from('products').select('id, name');
+    if (globalState.activeShopId) pQuery = pQuery.eq('shop_id', globalState.activeShopId);
+
+    const { data: prods } = await pQuery;
     if ((prods || []).length < 2) {
       Toast.error('At least 2 products are required to link recipes.');
       return;
@@ -561,7 +597,10 @@ export async function mount(container) {
   // Standard Stubs for PO, GRN, PRN & Quick Stock Adjust
   // =========================================================================
   async function renderPOTable(t) {
-    const { data } = await supabase.from('purchase_orders').select('*, suppliers(name)').order('created_at', { ascending: false });
+    let query = supabase.from('purchase_orders').select('*, suppliers(name)').order('created_at', { ascending: false });
+    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+
+    const { data } = await query;
     renderDataTable({
       targetId: 'inv-table-content',
       columns: [
@@ -574,7 +613,10 @@ export async function mount(container) {
   }
 
   async function renderGRNTable(t) {
-    const { data } = await supabase.from('goods_received_notes').select('*, suppliers(name)').order('received_at', { ascending: false });
+    let query = supabase.from('goods_received_notes').select('*, suppliers(name)').order('received_at', { ascending: false });
+    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+
+    const { data } = await query;
     renderDataTable({
       targetId: 'inv-table-content',
       columns: [
@@ -587,7 +629,10 @@ export async function mount(container) {
   }
 
   async function renderPRNTable(t) {
-    const { data } = await supabase.from('purchase_return_notes').select('*, suppliers(name)').order('created_at', { ascending: false });
+    let query = supabase.from('purchase_return_notes').select('*, suppliers(name)').order('created_at', { ascending: false });
+    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+
+    const { data } = await query;
     renderDataTable({
       targetId: 'inv-table-content',
       columns: [
@@ -601,7 +646,7 @@ export async function mount(container) {
 
   function openStockAdjustmentModal(target = null) {
     Modal.open({
-      title: 'Manual Stock Discrepancy Adjustment',
+      title: target ? `Adjust Stock: ${target.products?.name || 'Item'}` : 'Manual Stock Discrepancy Adjustment',
       content: `
         <form id="form-stock-adj">
           <div class="form-group">
@@ -618,10 +663,26 @@ export async function mount(container) {
       onSubmit: async (fd) => {
         if (target) {
           const delta = parseFloat(fd.delta);
+          const newQty = Number(target.quantity_on_hand) + delta;
+          const nowIso = new Date().toISOString();
+
           await supabase.from('inventory').update({
-            quantity_on_hand: Number(target.quantity_on_hand) + delta,
-            updated_at: new Date().toISOString(),
+            quantity_on_hand: newQty,
+            updated_at: nowIso,
           }).eq('id', target.id);
+
+          // Record adjustment transaction
+          if (target.product_id) {
+            await supabase.from('inventory_transactions').insert([{
+              shop_id: globalState.activeShopId,
+              product_id: target.product_id,
+              transaction_type: 'manual_adjustment',
+              quantity: delta,
+              reference: fd.reason,
+              created_at: nowIso
+            }]);
+          }
+
           Toast.success('Inventory balance updated.');
           await loadActiveTab();
         }
@@ -630,5 +691,8 @@ export async function mount(container) {
   }
 
   await loadActiveTab();
-  return () => {};
+
+  return () => {
+    unsubs.forEach((unsub) => unsub && unsub());
+  };
 }
