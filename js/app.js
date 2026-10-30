@@ -84,7 +84,25 @@ function bindSidebarFlyoutMenu() {
 
     if (hasGroup) {
       triggers.forEach((btn) => btn.classList.remove('active'));
-      if (targetBtn) targetBtn.classList.add('active');
+      if (targetBtn) {
+        targetBtn.classList.add('active');
+
+        // Dynamically calculate the top position of the clicked icon
+        const rect = targetBtn.getBoundingClientRect();
+        const iconTop = rect.top;
+        const windowHeight = window.innerHeight;
+
+        if (flyoutPanel) {
+          // Prevent flyout from extending past bottom of view screen
+          if (iconTop + 250 > windowHeight) {
+            flyoutPanel.style.top = 'auto';
+            flyoutPanel.style.bottom = '16px';
+          } else {
+            flyoutPanel.style.bottom = 'auto';
+            flyoutPanel.style.top = `${Math.max(12, iconTop)}px`;
+          }
+        }
+      }
       
       if (flyoutPanel) flyoutPanel.classList.remove('hidden');
       if (backdrop) backdrop.classList.remove('hidden');
@@ -132,7 +150,6 @@ function bindSidebarFlyoutMenu() {
     });
   }
 }
-
 // =========================================================================
 // Supabase Real-Time Channel Synchronization
 // =========================================================================
