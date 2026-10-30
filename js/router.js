@@ -1,5 +1,32 @@
 import { globalState } from './state.js';
 
+const salesTabTitles = {
+  'sales-summary': 'Sales Summary',
+  'receipts': 'Receipts',
+  'refunds': 'Refunds',
+  'sales-by-product': 'Sales by Product',
+  'sales-by-category': 'Sales by Category',
+  'sales-by-discount': 'Sales by Discount',
+  'sales-by-payment-type': 'Sales by Payment Type',
+  'taxes': 'Taxes',
+  'charges': 'Charges',
+  'shifts': 'Shifts',
+  'product-wise-receipts': 'Product Wise Receipts',
+  'sales-by-trends': 'Sales by Trends',
+  'deleted-receipts': 'Deleted Receipts',
+  'order-type-wise-sales': 'Order Type Wise Sales',
+  'product-wise-tax': 'Product Wise Tax',
+  'manual-receipts': 'Manual Receipts',
+  'sales-by-orders': 'Sales by Orders',
+  'product-wise-orders': 'Product Wise Orders',
+  'sales-by-modifiers': 'Sales by Modifiers',
+  'product-sales-by-other-staff': 'Product Sales by Other Staff',
+  'ecommerce-sales': 'Ecommerce Sales',
+  'product-wise-deleted-receipts': 'Product Wise Deleted Receipts',
+  'refund-and-credit-notes': 'Refund & Credit Notes',
+  'deleted-products-in-open-orders': 'Deleted Products in Open Orders'
+};
+
 const routes = {
   '#pos': {
     title: 'Cashier Terminal',
@@ -12,7 +39,7 @@ const routes = {
     navKey: 'dashboard',
   },
   '#sales-summary': {
-    title: 'Sales & Receipts',
+    title: 'Sales Management',
     loader: () => import('./views/salesReports.js'),
     navKey: 'sales',
   },
@@ -59,9 +86,15 @@ export async function navigate() {
   const viewport = document.getElementById('app-viewport');
   const titleEl = document.getElementById('current-view-title');
 
-  // 1. Update Title Header
+  // 1. Resolve & Update Dynamic View Title
+  const activeTab = queryParams.get('tab') || 'sales-summary';
+  let viewTitle = targetRoute.title;
+  if (cleanHash === '#sales-summary' && salesTabTitles[activeTab]) {
+    viewTitle = `Sales | ${salesTabTitles[activeTab]}`;
+  }
+
   if (titleEl) {
-    titleEl.textContent = targetRoute.title;
+    titleEl.textContent = viewTitle;
   }
 
   // 2. Highlight Active Rail Links & Subnav Items
@@ -69,7 +102,9 @@ export async function navigate() {
     const href = link.getAttribute('href');
     const navKey = link.dataset.nav || link.dataset.menuTrigger;
 
-    if (href === fullHash || href === cleanHash || navKey === targetRoute.navKey) {
+    if (href === fullHash || (cleanHash === '#sales-summary' && href === fullHash)) {
+      link.classList.add('active');
+    } else if (navKey === targetRoute.navKey && !queryStr) {
       link.classList.add('active');
     } else {
       link.classList.remove('active');
@@ -99,9 +134,6 @@ export async function navigate() {
   try {
     const module = await targetRoute.loader();
     viewport.innerHTML = '';
-    
-    // Pass queryParams or tab to the view mount function if supported
-    const activeTab = queryParams.get('tab') || 'default';
     
     if (typeof module.mount === 'function') {
       currentCleanup = await module.mount(viewport, activeTab, queryParams);

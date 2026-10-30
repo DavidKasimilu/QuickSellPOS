@@ -54,15 +54,20 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // =========================================================================
-// Sidebar Flyout Navigation Submenu & Accordion Dropdown Logic
+// Collapsible Sidebar Navigation & Flyout Menu Logic
 // =========================================================================
 function bindSidebarFlyoutMenu() {
   const triggers = document.querySelectorAll('[data-menu-trigger]');
   const flyoutPanel = document.getElementById('subnav-flyout');
   const flyoutGroups = document.querySelectorAll('[data-flyout-parent]');
   const backdrop = document.getElementById('subnav-backdrop');
-  const toggleMobileSidebarBtn = document.getElementById('btn-toggle-sidebar');
+  const toggleSidebarBtn = document.getElementById('btn-toggle-sidebar');
   const sidebar = document.getElementById('main-sidebar');
+  const mainContent = document.querySelector('.main-content');
+
+  // Set initial collapsed state so content is unimpeded
+  if (sidebar) sidebar.classList.add('collapsed');
+  if (mainContent) mainContent.classList.add('expanded');
 
   function closeFlyout() {
     if (flyoutPanel) flyoutPanel.classList.add('hidden');
@@ -93,7 +98,6 @@ function bindSidebarFlyoutMenu() {
         const windowHeight = window.innerHeight;
 
         if (flyoutPanel) {
-          // Prevent flyout from extending past bottom of view screen
           if (iconTop + 320 > windowHeight) {
             flyoutPanel.style.top = 'auto';
             flyoutPanel.style.bottom = '16px';
@@ -111,6 +115,22 @@ function bindSidebarFlyoutMenu() {
     }
   }
 
+  // Burger button toggles side nav visibility
+  if (toggleSidebarBtn && sidebar) {
+    toggleSidebarBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isCollapsed = sidebar.classList.contains('collapsed');
+      if (isCollapsed) {
+        sidebar.classList.remove('collapsed');
+        if (mainContent) mainContent.classList.remove('expanded');
+      } else {
+        sidebar.classList.add('collapsed');
+        if (mainContent) mainContent.classList.add('expanded');
+        closeFlyout();
+      }
+    });
+  }
+
   // Trigger buttons click handlers
   triggers.forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -125,7 +145,7 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // Accordion drop-down toggles inside flyouts
+  // Accordion drop-down toggles inside flyouts (e.g. Advanced Sales & Suspicious Reports)
   const dropdownTriggers = document.querySelectorAll('[data-dropdown-trigger]');
   dropdownTriggers.forEach((trigger) => {
     trigger.addEventListener('click', (e) => {
@@ -146,11 +166,23 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // Handle clicks on subnav items & sub-items
+  // Handle clicks on subnav items & sub-items -> Navigate & hide menu
   const subnavItems = document.querySelectorAll('.subnav-item, .subnav-subitem');
   subnavItems.forEach((item) => {
     item.addEventListener('click', () => {
       closeFlyout();
+      if (sidebar) sidebar.classList.add('collapsed');
+      if (mainContent) mainContent.classList.add('expanded');
+    });
+  });
+
+  // Direct icon clicks auto-collapse sidebar
+  const directNavLinks = document.querySelectorAll('.sidebar-nav a.nav-icon-link');
+  directNavLinks.forEach((link) => {
+    link.addEventListener('click', () => {
+      closeFlyout();
+      if (sidebar) sidebar.classList.add('collapsed');
+      if (mainContent) mainContent.classList.add('expanded');
     });
   });
 
@@ -164,13 +196,6 @@ function bindSidebarFlyoutMenu() {
       closeFlyout();
     }
   });
-
-  // Mobile sidebar drawer toggle button
-  if (toggleMobileSidebarBtn && sidebar) {
-    toggleMobileSidebarBtn.addEventListener('click', () => {
-      sidebar.classList.toggle('mobile-open');
-    });
-  }
 }
 
 // =========================================================================
@@ -287,7 +312,7 @@ function switchAuthView(viewId) {
       subtitle.textContent = 'Register a new backoffice administrator account';
       break;
     case 'form-otp':
-      subtitle.textContent = 'Enter the 8-digit code delivered to your inbox';
+      subtitle.textContent = 'Enter the 6-digit code delivered to your inbox';
       break;
     case 'form-forgot':
       subtitle.textContent = 'Reset your portal password via email OTP';
@@ -361,7 +386,7 @@ function bindAuthActions() {
     }
   };
 
-  // 2. Sign Up (Send 8-digit OTP with Business Details)
+  // 2. Sign Up
   const formRegister = document.getElementById('form-register');
   formRegister.onsubmit = async (e) => {
     e.preventDefault();
@@ -536,7 +561,7 @@ function bindDateFilters() {
   const chips = document.querySelectorAll('.date-chip[data-period]');
   const calInput = document.getElementById('stats-calendar-filter');
 
-  calInput.value = globalState.filterDate;
+  if (calInput) calInput.value = globalState.filterDate;
 
   chips.forEach((chip) => {
     chip.onclick = () => {
@@ -556,16 +581,18 @@ function bindDateFilters() {
         globalState.setFilterDate(now.toISOString().split('T')[0]);
       }
 
-      calInput.value = globalState.filterDate;
+      if (calInput) calInput.value = globalState.filterDate;
       navigate();
     };
   });
 
-  calInput.onchange = (e) => {
-    chips.forEach((c) => c.classList.remove('active'));
-    globalState.setFilterDate(e.target.value);
-    navigate();
-  };
+  if (calInput) {
+    calInput.onchange = (e) => {
+      chips.forEach((c) => c.classList.remove('active'));
+      globalState.setFilterDate(e.target.value);
+      navigate();
+    };
+  }
 }
 
 function updateTopBarUserMeta(state) {

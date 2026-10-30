@@ -189,7 +189,7 @@
   <!-- ========================================================================= -->
   <div id="app-container" class="app-shell">
     
-    <!-- Left Navigation Rail Bar -->
+    <!-- Left Navigation Rail Bar (Hidden by default in CSS, slides in on burger click) -->
     <aside class="sidebar" id="main-sidebar">
       <div class="sidebar-top">
         <button class="nav-icon-btn profile-trigger" id="btn-open-profile" title="My Profile">
@@ -208,8 +208,8 @@
           <i data-lucide="layout-dashboard"></i>
         </a>
 
-        <!-- Sales & Receipts Category Trigger -->
-        <button class="nav-icon-link" data-menu-trigger="sales" title="Sales & Receipts">
+        <!-- Sales Management Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="sales" title="Sales Management">
           <i data-lucide="receipt"></i>
         </button>
 
@@ -254,21 +254,48 @@
     <!-- Submenu Flyout Menu Panel -->
     <div id="subnav-flyout" class="subnav-flyout-panel hidden">
       
-      <!-- 1. Sales & Transactions Group -->
+      <!-- 1. RESTRICTED SALES MANAGEMENT GROUP (Only requested items) -->
       <div class="subnav-group hidden" data-flyout-parent="sales">
         <div class="subnav-header">Sales Management</div>
-        <a href="#sales-summary" class="subnav-item" data-nav="sales-summary">Sales Overview</a>
-        <a href="#sales-summary?tab=receipts" class="subnav-item" data-nav="sales-summary">Receipts & Transactions</a>
-        <a href="#sales-summary?tab=history" class="subnav-item" data-nav="sales-summary">Sales History Report</a>
+        <a href="#sales-summary?tab=sales-summary" class="subnav-item" data-nav="sales-summary">Sales Summary</a>
+        <a href="#sales-summary?tab=receipts" class="subnav-item" data-nav="sales-summary">Receipts</a>
+        <a href="#sales-summary?tab=refunds" class="subnav-item" data-nav="sales-summary">Refunds</a>
+        <a href="#sales-summary?tab=sales-by-product" class="subnav-item" data-nav="sales-summary">Sales by product</a>
+        <a href="#sales-summary?tab=sales-by-category" class="subnav-item" data-nav="sales-summary">Sales by category</a>
+        <a href="#sales-summary?tab=sales-by-discount" class="subnav-item" data-nav="sales-summary">Sales by discount</a>
+        <a href="#sales-summary?tab=sales-by-payment-type" class="subnav-item" data-nav="sales-summary">Sales by payment type</a>
+        <a href="#sales-summary?tab=taxes" class="subnav-item" data-nav="sales-summary">Taxes</a>
+        <a href="#sales-summary?tab=charges" class="subnav-item" data-nav="sales-summary">Charges</a>
+        <a href="#sales-summary?tab=shifts" class="subnav-item" data-nav="sales-summary">Shifts</a>
         
-        <!-- Accordion Sub-Menu Dropdown -->
-        <div class="subnav-dropdown-toggle" data-dropdown-trigger="sales-reports">
-          <span>More Sales Reports</span>
+        <!-- Accordion Dropdown: Advanced Sales Report -->
+        <div class="subnav-dropdown-toggle" data-dropdown-trigger="advanced-sales-report">
+          <span>Advanced Sales Report</span>
           <i data-lucide="chevron-down" class="dropdown-icon"></i>
         </div>
-        <div class="subnav-dropdown-content hidden" data-dropdown-content="sales-reports">
-          <a href="#sales-summary?tab=shifts" class="subnav-subitem">Cashier Shift Reports</a>
-          <a href="#sales-summary?tab=refunds" class="subnav-subitem">Refunds & Voids Log</a>
+        <div class="subnav-dropdown-content hidden" data-dropdown-content="advanced-sales-report">
+          <a href="#sales-summary?tab=product-wise-receipts" class="subnav-subitem">Product wise receipts</a>
+          <a href="#sales-summary?tab=sales-by-trends" class="subnav-subitem">Sales by trends</a>
+          <a href="#sales-summary?tab=deleted-receipts" class="subnav-subitem">Deleted receipts</a>
+          <a href="#sales-summary?tab=order-type-wise-sales" class="subnav-subitem">Order type wise sales</a>
+          <a href="#sales-summary?tab=product-wise-tax" class="subnav-subitem">Product wise tax</a>
+          <a href="#sales-summary?tab=manual-receipts" class="subnav-subitem">Manual Receipts</a>
+          <a href="#sales-summary?tab=sales-by-orders" class="subnav-subitem">Sales by orders</a>
+          <a href="#sales-summary?tab=product-wise-orders" class="subnav-subitem">Product wise orders</a>
+          <a href="#sales-summary?tab=sales-by-modifiers" class="subnav-subitem">Sales by modifiers</a>
+          <a href="#sales-summary?tab=product-sales-by-other-staff" class="subnav-subitem">Product sales by other staff</a>
+          <a href="#sales-summary?tab=ecommerce-sales" class="subnav-subitem">Ecommerce sales</a>
+        </div>
+
+        <!-- Accordion Dropdown: Suspicious Reports -->
+        <div class="subnav-dropdown-toggle" data-dropdown-trigger="suspicious-reports">
+          <span>Suspicious Reports</span>
+          <i data-lucide="chevron-down" class="dropdown-icon"></i>
+        </div>
+        <div class="subnav-dropdown-content hidden" data-dropdown-content="suspicious-reports">
+          <a href="#sales-summary?tab=product-wise-deleted-receipts" class="subnav-subitem">Product wise deleted receipts</a>
+          <a href="#sales-summary?tab=refund-and-credit-notes" class="subnav-subitem">Refund and credit notes</a>
+          <a href="#sales-summary?tab=deleted-products-in-open-orders" class="subnav-subitem">Deleted products in open orders</a>
         </div>
       </div>
 
