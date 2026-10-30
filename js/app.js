@@ -56,6 +56,28 @@ document.addEventListener('DOMContentLoaded', async () => {
 // =========================================================================
 // Collapsible Sidebar Navigation & Flyout Menu Logic
 // =========================================================================
+function adjustMenuBoundary(menuElement, triggerElement = null) {
+  if (!menuElement) return;
+
+  const viewportHeight = window.innerHeight;
+  const bottomPadding = 24; // Safe margin from bottom edge / browser bar
+
+  if (triggerElement) {
+    const rect = triggerElement.getBoundingClientRect();
+    const availableSpace = viewportHeight - rect.top - bottomPadding;
+    
+    // Cap visible height to ~5 items max (approx 210px) or available space
+    const maxAllowed = Math.min(210, Math.max(120, availableSpace));
+    menuElement.style.maxHeight = `${maxAllowed}px`;
+  } else {
+    const rect = menuElement.getBoundingClientRect();
+    const availableSpace = viewportHeight - rect.top - bottomPadding;
+    menuElement.style.maxHeight = `${Math.max(150, availableSpace)}px`;
+  }
+  
+  menuElement.style.overflowY = 'auto';
+}
+
 function bindSidebarFlyoutMenu() {
   const triggers = document.querySelectorAll('[data-menu-trigger]');
   const flyoutPanel = document.getElementById('subnav-flyout');
@@ -92,7 +114,7 @@ function bindSidebarFlyoutMenu() {
       if (targetBtn) {
         targetBtn.classList.add('active');
 
-        // Dynamically calculate the top position of the clicked icon
+        // Dynamically calculate the top position relative to browser bottom
         const rect = targetBtn.getBoundingClientRect();
         const iconTop = rect.top;
         const windowHeight = window.innerHeight;
@@ -101,9 +123,11 @@ function bindSidebarFlyoutMenu() {
           if (iconTop + 320 > windowHeight) {
             flyoutPanel.style.top = 'auto';
             flyoutPanel.style.bottom = '16px';
+            flyoutPanel.style.maxHeight = `${windowHeight - 32}px`;
           } else {
             flyoutPanel.style.bottom = 'auto';
             flyoutPanel.style.top = `${Math.max(12, iconTop)}px`;
+            flyoutPanel.style.maxHeight = `${windowHeight - Math.max(12, iconTop) - 24}px`;
           }
         }
       }
@@ -158,6 +182,7 @@ function bindSidebarFlyoutMenu() {
         if (isHidden) {
           content.classList.remove('hidden');
           trigger.classList.add('open');
+          adjustMenuBoundary(content, trigger);
         } else {
           content.classList.add('hidden');
           trigger.classList.remove('open');
