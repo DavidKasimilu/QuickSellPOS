@@ -1,192 +1,104 @@
-# QuickSell POS
+# QuickSell POS | Backoffice Portal
 
-A lightweight, serverless Point of Sale (POS) and backoffice retail management system built as a vanilla JavaScript Single Page Application (SPA). Powered by Supabase PostgreSQL with strict Row Level Security (RLS) and Cloudflare Workers as an edge API proxy. https://davidkasimilu.github.io/QuickSellPOS/
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Version](https://img.shields.io/badge/version-1.0.0-teal.svg)
+![Platform](https://img.shields.io/badge/platform-Web%20%7C%20Mobile%20%7C%20Desktop-informational.svg)
 
-![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%2B%20RLS-3ECF8E?style=flat&logo=supabase&logoColor=white)
-![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Edge%20Worker%20Proxy-F38020?style=flat&logo=cloudflare&logoColor=white)
-![JavaScript](https://img.shields.io/badge/ES6-Vanilla%20SPA-F7DF1E?style=flat&logo=javascript&logoColor=black)
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
+**QuickSell POS Backoffice Portal** is a modern, responsive web application designed for point-of-sale management, inventory tracking, multi-branch control, employee monitoring, and real-time transaction analytics. 
 
----
-
-## Architecture Overview
-
-[ Browser / Mobile Client ]
-│
-│ (CORS Preflight, Token Injection, Dynamic Headers)
-▼
-[ Cloudflare Workers Edge Proxy ]
-│
-│ (Authenticated REST / PostgREST)
-▼
-[ Supabase Backend ]
-├── PostgreSQL Schema & Automated Triggers
-├── Row-Level Security (Multi-Tenant Branch Isolation)
-└── Brevo SMTP (Custom 6-Digit Email OTP Delivery)
-
-
-- **Frontend:** Pure ES6 JavaScript SPA with dynamic hash routing (`#pos`, `#inventory`, `#dashboard`), modular view lifecycles, and a responsive modern CSS interface.
-- **Edge Layer:** A Cloudflare Worker proxy handling credential stripping, API key injection, and automated CORS preflight matching for local, staging, and production domains.
-- **Database & Auth:** Supabase PostgreSQL leveraging custom schemas, definer triggers for inventory automation, and transactional 6-digit OTP authentication via Brevo SMTP.
+Engineered with a streamlined vertical navigation rail and context-sensitive flyout submenus, the backoffice dashboard provides a seamless workflow across mobile (Android/iOS) and desktop browsers.
 
 ---
 
-## Core Features
+## 📸 Key Features
 
-### 1. Live Cashier Terminal (`#pos`)
-- Touch-optimized product grid with instant category filtering.
-- Fast hardware barcode scanner support via keyboard return auto-matching.
-- Dynamic modifier group popups for customized item variants (sizes, toppings, extras).
-- Ticket subtotal, tax calculation, and active discount application.
-- Multi-tender split checkouts (Cash, M-PESA, Card) with change calculator.
-- Built-in ESC/POS receipt generation with direct print fallbacks.
-
-### 2. Loss Prevention & Suspicious Logs
-- **Cart Discard Tracking:** Automatically audits and logs when cashiers remove items from uncommitted tickets or discard counter tickets.
-- **Receipt Audits:** Transaction void logs, refund histories, and register discrepancy reconciliations.
-
-### 3. Inventory & Warehouse Management
-- **Stock Tracking:** Real-time stock-on-hand tracking with threshold-based low-stock alerts.
-- **Physical Stocktakes:** Multi-item count sheets that calculate physical-to-system variances and automatically commit reconciliations.
-- **Recipe Assemblies (BOM):** Bill of Materials linking finished products to raw ingredients (automatically decrements raw stock upon sale).
-- **Perishable Batches & Expiry:** Shelf-life tracking with color-coded alerts for expiring and expired stock lots.
-- **Procurement & Logistics:** Purchase Orders (PO), Goods Received Notes (GRN) with automated stock increment triggers, Purchase Return Notes (PRN), and Inter-branch Transfers (TOG).
-- **Valuation Reports:** Total inventory valuation calculated at cost vs. projected retail margin.
-
-### 4. Product Catalog & Hardware Labeling
-- Standard catalog master (SKU, barcode, cost price, retail price, tax tier).
-- Category and Unit of Measure (UOM) configurations.
-- Modifier groups with single-choice or multi-choice price adjustments.
-- **Barcode Generator:** Pure SVG Code128 generation and multi-label printable sticker sheet formatting (A4 / sticker roll ready).
-
-### 5. Hardware Connectivity
-- Direct raw ESC/POS byte streaming via browser **WebUSB** and **WebBluetooth** protocols.
-- Standard cross-browser thermal print dialog fallback (58mm / 80mm roll format).
-
-### 6. Multi-Tenant Branch RLS Security
-- Branch-level data segmentation: cashiers and store staff can only view colleagues and records associated with their assigned `shop_id`.
-- Automated security-definer triggers guaranteeing admin account provisioning on startup.
+- **Responsive Vertical Rail & Submenu Navigation:** Modern side-rail navigation with dynamic flyout menus calibrated for desktop monitors and mobile touchscreens.
+- **Real-Time Data Synchronization:** Instant updates for stock levels, sales orders, and receipts powered by Supabase WebSockets.
+- **Cashier Register (POS):** Fast-checkout cashier portal supporting barcoding, custom discount application, and customer receipt generation.
+- **Inventory & Stock Management:** Complete tracking of available inventory, Stock Adjustments (SA), Purchase Orders (PO), and Goods Received Notes (GRN).
+- **Analytics & KPI Dashboard:** Visual breakdown of Gross Sales, Net Sales, COGS, Gross Profit, and historical date filters (Today, Yesterday, Last 7 Days).
+- **Multi-Role Security:** Granular access permissions for Store Owners, Managers, and Cashiers.
+- **Multi-Currency & Regionalization:** Native support for KES, TZS, UGS, USD, localized date/time formatting, and multi-language setups.
 
 ---
 
-## Project Structure
+## 🛠️ Tech Stack
 
-├── index.html                   # Master layout shell, navigation & auth overlays
+- **Frontend:** HTML5, Modern CSS3 (CSS Variables, Flexbox/Grid), Vanilla JavaScript (ES Modules)
+- **Icons:** [Lucide Icons](https://lucide.dev/)
+- **Typography:** [Inter (Google Fonts)](https://fonts.google.com/specimen/Inter)
+- **Backend & Database:** [Supabase](https://supabase.com/) (PostgreSQL, Realtime WebSockets, Authentication)
+
+---
+
+## 📂 Project Structure
+
+```text
+QuickSellPOS/
+├── index.html              # Main single-page application entry point
 ├── css/
-│   ├── layout.css               # Core grid, side drawer, bottom mobile nav & breakpoints
-│   └── components.css           # UI components, tables, modals, cards, badges & inputs
+│   ├── layout.css          # App structural layouts, side rail, & responsive rules
+│   └── components.css      # Custom UI component styles (Buttons, KPI cards, tables)
 ├── js/
-│   ├── app.js                   # Main application orchestrator & profile controller
-│   ├── auth.js                  # Brevo OTP, login, signup & recovery workflows
-│   ├── router.js                # Hash router with lazy-loading view lifecycles
-│   ├── state.js                 # Central reactive state & subscriber management
-│   ├── supabaseClient.js        # Supabase client routed through the Worker proxy
-│   ├── components/
-│   │   ├── BarcodeGenerator.js  # Client-side Code128 barcode generator
-│   │   ├── DataTable.js         # Dynamic data table renderer with pagination & actions
-│   │   ├── Modal.js             # Reusable accessible modal component
-│   │   ├── PrinterDriver.js     # WebUSB, WebBluetooth & ESC/POS byte-buffer driver
-│   │   └── Toast.js             # Notification toast alerts
-│   └── views/
-│       ├── pos.js               # Live Cashier Terminal & checkout cart
-│       ├── dashboard.js         # Analytics, KPI metrics & sales performance
-│       ├── salesReports.js      # Receipts, shift reports & suspicious discard audits
-│       ├── products.js          # Item master, barcode printing & modifier mapping
-│       ├── inventory.js         # Stock, BOM recipes, audits, valuation & expiry
-│       ├── customers.js         # Customer CRM, debtor accounts & settlements
-│       ├── promotions.js        # Discount plans, price tiers & bulk catalog repricing
-│       ├── employees.js         # Staff roles, permission matrices & commissions
-│       └── settings.js          # Store branches, terminal registers & API webhooks
-└── worker/
-└── worker.js                # Cloudflare Workers gateway & CORS reverse proxy
-
+│   ├── app.js              # Application bootstrap & event bindings
+│   ├── auth.js             # Authentication engine & Supabase auth sync
+│   ├── router.js           # Single Page Application (SPA) hash router
+│   ├── state.js            # Global reactive application state
+│   ├── supabaseClient.js   # Supabase client setup & configuration
+│   ├── components/         # Reusable UI component logic
+│   └── views/              # View controllers (Dashboard, POS, Products, etc.)
+└── README.md               # Project documentation
+```
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
-- Node.js (v18+ recommended) or any static HTTP server (e.g., Python `http.server`, Live Server).
-- A [Supabase](https://supabase.com/) project.
-- A [Cloudflare](https://dash.cloudflare.com/) account for deploying the proxy worker.
-- A verified [Brevo](https://www.brevo.com/) account for SMTP delivery.
+
+- A modern web browser (Chrome, Safari, Brave, Edge, Firefox).
+- A local web server environment (e.g., VS Code *Live Server*, `http-server`, or Nginx).
+
+### Installation & Setup
+
+1. **Clone or Download the Repository:**
+   ```bash
+   git clone https://github.com/davidkasimilu/QuickSellPOS.git
+   cd QuickSellPOS
+   ```
+
+2. **Configure Supabase Credentials:**
+   Ensure your Supabase project URL and API key are configured in `js/supabaseClient.js`:
+   ```javascript
+   import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+   const SUPABASE_URL = 'YOUR_SUPABASE_PROJECT_URL';
+   const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+   export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+   ```
+
+3. **Launch the Portal:**
+   Run a local development server or open `index.html` via your local web server.
 
 ---
 
-### Step 1: Database Setup (Supabase)
+## 📱 Mobile & Desktop Navigation
 
-1. Open your **Supabase Dashboard** -> **SQL Editor**.
-2. Run your database migration script to generate all schemas, constraints, automated triggers, and Row Level Security (RLS) policies.
-3. Configure **Brevo Custom SMTP**:
-   - Navigate to **Project Settings** -> **Authentication** -> **Custom SMTP**.
-   - Enable Custom SMTP using your Brevo credentials (`smtp-relay.brevo.com`, port `587`).
-   - Ensure the Sender Email matches your verified sender in the Brevo console.
+The interface adapts dynamically across screen widths:
+- **Desktop View:** The side navigation rail stays sticky on the left margin, giving maximum horizontal space to data tables and sales analytics.
+- **Mobile View ($< 768\text{px}$):** The side navigation adapts cleanly, sliding over smoothly or displaying flyout submenus directly adjacent to the active menu icon without obscuring main content views.
 
 ---
 
-### Step 2: Deploy Cloudflare Worker Proxy
+## 📄 License
 
-1. In the Cloudflare Dashboard, create a new Worker (e.g., `quicksell-gateway`).
-2. Add your Worker script (`worker/worker.js`) to handle dynamic CORS header reflections and authentication proxying.
-3. Add the following **Environment Variables** in the Worker settings:
-   - `SUPABASE_URL`: Your Supabase project URL (`https://your-ref.supabase.co`).
-   - `SUPABASE_ANON_KEY`: Your Supabase public anonymous API key.
-4. Deploy the Worker and note its public URL:
-https://quicksell-gateway..workers.dev
-
+Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
 
-### Step 3: Configure Frontend Client
+## 👨‍💻 Author & Support
 
-In `js/supabaseClient.js`, point the client to your Cloudflare Worker proxy URL:
+Developed and maintained by **David Kasimilu**.
 
-```javascript
-import { createClient } from '[https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm](https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm)';
-
-// Route all requests through your Cloudflare Edge Proxy
-const WORKER_PROXY_URL = 'https://quicksell-gateway.<your-subdomain>.workers.dev';
-
-export const supabase = createClient(WORKER_PROXY_URL, 'public-client-proxy', {
-auth: {
- persistSession: true,
- autoRefreshToken: true,
-},
-});
-Step 4: Run Locally
-Start a local static development server in the project root:
-
-Bash
-# Using Python
-python3 -m http.server 8080
-
-# Using Node.js (npx)
-npx serve .
-Open http://localhost:8080 in your browser.
-
-Deployment (GitHub Pages)
-Because QuickSell POS is a dependency-free static SPA:
-
-Push the code to your GitHub repository.
-
-In your repository, go to Settings -> Pages.
-
-Under Build and deployment, select Deploy from a branch.
-
-Set the branch to main (or master) and directory to / (root).
-
-Click Save. GitHub Pages will deploy the project automatically.
-
-Ensure your Cloudflare Worker CORS origin settings allow your GitHub Pages domain:
-
-JavaScript
-const isGitHubPages = origin.endsWith(".github.io");
-Security Model
-No Exposed Database Credentials: The frontend carries no real Supabase secret keys; all requests pass through the Cloudflare Worker where headers are validated and the internal anonymous key is injected server-side.
-
-Row Level Security (RLS): Every PostgreSQL table enforces security-definer rules, ensuring users can only read or write records tied to their store branch or authorized role.
-
-Live Discard Audits: Removing line items from active counter tickets creates unalterable rows in cart_discard_logs for loss prevention audits.
-
-License
-This project is licensed under the MIT License. See the LICENSE file for details.
+For inquiries, support, or bug reporting, feel free to open an issue or reach out directly.
