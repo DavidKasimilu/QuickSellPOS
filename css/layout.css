@@ -2,7 +2,7 @@
   --sidebar-width: 68px;
   --topbar-height: 64px;
   --drawer-width: 380px;
-  --subnav-width: 260px;
+  --subnav-width: 270px;
   --z-sidebar: 30;
   --z-subnav: 35;
   --z-topbar: 20;
@@ -108,13 +108,13 @@ svg.lucide, i[data-lucide] {
 }
 
 /* ==========================================================================
-   Dynamic Submenu Flyout Panel
+   Dynamic Submenu Flyout Panel (Scrollable Container)
    ========================================================================== */
 .subnav-flyout-panel {
   position: fixed;
   left: calc(var(--sidebar-width) + 12px);
   width: var(--subnav-width);
-  max-height: 80vh;
+  max-height: calc(100vh - 32px);
   background: #ffffff;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
@@ -123,6 +123,25 @@ svg.lucide, i[data-lucide] {
   overflow-y: auto;
   padding: 12px 0;
   transition: opacity var(--transition-fast);
+}
+
+/* Scrollbar styling for long sub-menu lists */
+.subnav-flyout-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.subnav-flyout-panel::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 0 12px 12px 0;
+}
+
+.subnav-flyout-panel::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.subnav-flyout-panel::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .subnav-flyout-panel.hidden {
@@ -160,6 +179,63 @@ svg.lucide, i[data-lucide] {
 }
 
 .subnav-item:hover {
+  background-color: var(--teal-50);
+  color: var(--teal-600);
+}
+
+/* Accordion Dropdown Sub-menu Styles */
+.subnav-dropdown-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: var(--teal-700);
+  background-color: var(--bg-canvas);
+  cursor: pointer;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  margin-top: 6px;
+  transition: background-color var(--transition-fast);
+}
+
+.subnav-dropdown-toggle:hover {
+  background-color: var(--teal-50);
+}
+
+.subnav-dropdown-toggle .dropdown-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform var(--transition-fast);
+}
+
+.subnav-dropdown-toggle.open .dropdown-icon {
+  transform: rotate(180deg);
+}
+
+.subnav-dropdown-content {
+  display: flex;
+  flex-direction: column;
+  background-color: #fafafa;
+  padding: 4px 0;
+}
+
+.subnav-dropdown-content.hidden {
+  display: none !important;
+}
+
+.subnav-subitem {
+  display: block;
+  padding: 8px 16px 8px 28px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.subnav-subitem:hover {
   background-color: var(--teal-50);
   color: var(--teal-600);
 }
@@ -395,12 +471,12 @@ svg.lucide, i[data-lucide] {
 }
 
 /* ==========================================================================
-   Mobile Responsiveness (< 768px)
+   Mobile & Tablet Responsiveness (< 768px)
    ========================================================================== */
 @media (max-width: 768px) {
   :root {
     --drawer-width: 100vw;
-    --subnav-width: 240px;
+    --subnav-width: 250px;
   }
 
   .mobile-nav-toggle {
@@ -417,7 +493,6 @@ svg.lucide, i[data-lucide] {
     box-shadow: 4px 0 16px rgba(0, 0, 0, 0.1);
   }
 
-  /* Make viewport take full width next to sidebar */
   .main-content {
     width: calc(100vw - var(--sidebar-width));
     margin-left: var(--sidebar-width);
@@ -425,7 +500,7 @@ svg.lucide, i[data-lucide] {
 
   .subnav-flyout-panel {
     left: calc(var(--sidebar-width) + 8px);
-    width: calc(100vw - var(--sidebar-width) - 24px);
+    width: calc(100vw - var(--sidebar-width) - 20px);
   }
 
   .top-bar {
