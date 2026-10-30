@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // =========================================================================
-// Sidebar Flyout Navigation Submenu Logic
+// Sidebar Flyout Navigation Submenu & Accordion Dropdown Logic
 // =========================================================================
 function bindSidebarFlyoutMenu() {
   const triggers = document.querySelectorAll('[data-menu-trigger]');
@@ -94,7 +94,7 @@ function bindSidebarFlyoutMenu() {
 
         if (flyoutPanel) {
           // Prevent flyout from extending past bottom of view screen
-          if (iconTop + 250 > windowHeight) {
+          if (iconTop + 320 > windowHeight) {
             flyoutPanel.style.top = 'auto';
             flyoutPanel.style.bottom = '16px';
           } else {
@@ -111,6 +111,7 @@ function bindSidebarFlyoutMenu() {
     }
   }
 
+  // Trigger buttons click handlers
   triggers.forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -124,8 +125,29 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // Handle clicks on subnav links
-  const subnavItems = document.querySelectorAll('.subnav-item');
+  // Accordion drop-down toggles inside flyouts
+  const dropdownTriggers = document.querySelectorAll('[data-dropdown-trigger]');
+  dropdownTriggers.forEach((trigger) => {
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = trigger.dataset.dropdownTrigger;
+      const content = document.querySelector(`[data-dropdown-content="${key}"]`);
+
+      if (content) {
+        const isHidden = content.classList.contains('hidden');
+        if (isHidden) {
+          content.classList.remove('hidden');
+          trigger.classList.add('open');
+        } else {
+          content.classList.add('hidden');
+          trigger.classList.remove('open');
+        }
+      }
+    });
+  });
+
+  // Handle clicks on subnav items & sub-items
+  const subnavItems = document.querySelectorAll('.subnav-item, .subnav-subitem');
   subnavItems.forEach((item) => {
     item.addEventListener('click', () => {
       closeFlyout();
@@ -150,6 +172,7 @@ function bindSidebarFlyoutMenu() {
     });
   }
 }
+
 // =========================================================================
 // Supabase Real-Time Channel Synchronization
 // =========================================================================
