@@ -56,88 +56,87 @@
       </form>
 
       <!-- Registration View -->
-      <!-- View 2: Sign Up Form -->
-          <form id="form-register" class="auth-form hidden">
-            <div class="form-group">
-              <label for="reg-fullname">Owner / Full Name</label>
-              <div class="input-icon-wrap">
-                <i data-lucide="user"></i>
-                <input type="text" id="reg-fullname" placeholder="e.g. David Kasimilu" required autocomplete="name" />
-              </div>
+      <form id="form-register" class="auth-form hidden">
+        <div class="form-group">
+          <label for="reg-fullname">Owner / Full Name</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="user"></i>
+            <input type="text" id="reg-fullname" placeholder="e.g. David Kasimilu" required autocomplete="name" />
+          </div>
+        </div>
+
+        <div class="form-row" style="display:flex; gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label for="reg-business-name">Business Name</label>
+            <div class="input-icon-wrap">
+              <i data-lucide="store"></i>
+              <input type="text" id="reg-business-name" placeholder="Store or Company name" required />
             </div>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label for="reg-business-type">Business Type</label>
+            <select id="reg-business-type" required>
+              <option value="retail">Retail Store</option>
+              <option value="supermarket">Supermarket / Grocery</option>
+              <option value="restaurant">Restaurant / Fast Food</option>
+              <option value="cafe">Cafe / Bakery</option>
+              <option value="pharmacy">Chemist / Pharmacy</option>
+              <option value="electronics">Electronics / Hardware</option>
+              <option value="services">Services / Salon</option>
+              <option value="other">Other Business</option>
+            </select>
+          </div>
+        </div>
 
-            <div class="form-row" style="display:flex; gap:12px;">
-              <div class="form-group" style="flex:1;">
-                <label for="reg-business-name">Business Name</label>
-                <div class="input-icon-wrap">
-                  <i data-lucide="store"></i>
-                  <input type="text" id="reg-business-name" placeholder="Store or Company name" required />
-                </div>
-              </div>
-              <div class="form-group" style="flex:1;">
-                <label for="reg-business-type">Business Type</label>
-                <select id="reg-business-type" required>
-                  <option value="retail">Retail Store</option>
-                  <option value="supermarket">Supermarket / Grocery</option>
-                  <option value="restaurant">Restaurant / Fast Food</option>
-                  <option value="cafe">Cafe / Bakery</option>
-                  <option value="pharmacy">Chemist / Pharmacy</option>
-                  <option value="electronics">Electronics / Hardware</option>
-                  <option value="services">Services / Salon</option>
-                  <option value="other">Other Business</option>
-                </select>
-              </div>
+        <div class="form-row" style="display:flex; gap:12px;">
+          <div class="form-group" style="flex:1;">
+            <label for="reg-phone">Phone Number</label>
+            <div class="input-icon-wrap">
+              <i data-lucide="phone"></i>
+              <input type="tel" id="reg-phone" placeholder="e.g. +254 7..." required autocomplete="tel" />
             </div>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label for="reg-country">Country</label>
+            <select id="reg-country" required>
+              <option value="Kenya" selected>Kenya</option>
+              <option value="Tanzania">Tanzania</option>
+              <option value="Uganda">Uganda</option>
+              <option value="Rwanda">Rwanda</option>
+              <option value="Nigeria">Nigeria</option>
+              <option value="South Africa">South Africa</option>
+              <option value="United Kingdom">United Kingdom</option>
+              <option value="United States">United States</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
 
-            <div class="form-row" style="display:flex; gap:12px;">
-              <div class="form-group" style="flex:1;">
-                <label for="reg-phone">Phone Number</label>
-                <div class="input-icon-wrap">
-                  <i data-lucide="phone"></i>
-                  <input type="tel" id="reg-phone" placeholder="e.g. +254 7..." required autocomplete="tel" />
-                </div>
-              </div>
-              <div class="form-group" style="flex:1;">
-                <label for="reg-country">Country</label>
-                <select id="reg-country" required>
-                  <option value="Kenya" selected>Kenya</option>
-                  <option value="Tanzania">Tanzania</option>
-                  <option value="Uganda">Uganda</option>
-                  <option value="Rwanda">Rwanda</option>
-                  <option value="Nigeria">Nigeria</option>
-                  <option value="South Africa">South Africa</option>
-                  <option value="United Kingdom">United Kingdom</option>
-                  <option value="United States">United States</option>
-                  <option value="Other">Other</option>
-                </select>
-              </div>
-            </div>
+        <div class="form-group">
+          <label for="reg-email">Account Email</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="mail"></i>
+            <input type="email" id="reg-email" placeholder="name@business.com" required autocomplete="email" />
+          </div>
+        </div>
 
-            <div class="form-group">
-              <label for="reg-email">Account Email</label>
-              <div class="input-icon-wrap">
-                <i data-lucide="mail"></i>
-                <input type="email" id="reg-email" placeholder="name@business.com" required autocomplete="email" />
-              </div>
-            </div>
+        <div class="form-group">
+          <label for="reg-password">Security Password</label>
+          <div class="input-icon-wrap">
+            <i data-lucide="lock"></i>
+            <input type="password" id="reg-password" placeholder="Min. 8 characters" required autocomplete="new-password" minlength="8" />
+          </div>
+        </div>
 
-            <div class="form-group">
-              <label for="reg-password">Security Password</label>
-              <div class="input-icon-wrap">
-                <i data-lucide="lock"></i>
-                <input type="password" id="reg-password" placeholder="Min. 8 characters" required autocomplete="new-password" minlength="8" />
-              </div>
-            </div>
+        <button type="submit" class="btn btn-teal-primary btn-block">
+          Register Store & Send OTP
+        </button>
 
-            <button type="submit" class="btn btn-teal-primary btn-block">
-              Register Store & Send OTP
-            </button>
-
-            <p class="auth-switch">
-              Already registered? 
-              <a href="#" class="text-link" id="link-goto-login-1">Sign in</a>
-            </p>
-          </form>
+        <p class="auth-switch">
+          Already registered? 
+          <a href="#" class="text-link" id="link-goto-login-1">Sign in</a>
+        </p>
+      </form>
 
       <!-- OTP Verification View -->
       <form id="form-otp" class="auth-form hidden">
@@ -190,8 +189,8 @@
   <!-- ========================================================================= -->
   <div id="app-container" class="app-shell">
     
-    <!-- Left Navigation Drawer -->
-    <aside class="sidebar">
+    <!-- Left Navigation Rail Bar -->
+    <aside class="sidebar" id="main-sidebar">
       <div class="sidebar-top">
         <button class="nav-icon-btn profile-trigger" id="btn-open-profile" title="My Profile">
           <i data-lucide="circle-user-round"></i>
@@ -199,33 +198,50 @@
       </div>
 
       <nav class="sidebar-nav">
+        <!-- Direct POS Access -->
         <a href="#pos" class="nav-icon-link" data-nav="pos" title="Cashier Register">
           <i data-lucide="shopping-cart"></i>
         </a>
+
+        <!-- Main Dashboard Direct Link -->
         <a href="#dashboard" class="nav-icon-link active" data-nav="dashboard" title="Dashboard">
           <i data-lucide="layout-dashboard"></i>
         </a>
-        <a href="#sales-summary" class="nav-icon-link" data-nav="sales-summary" title="Sales & Receipts">
+
+        <!-- Sales & Receipts Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="sales" title="Sales & Receipts">
           <i data-lucide="receipt"></i>
-        </a>
-        <a href="#products" class="nav-icon-link" data-nav="products" title="Product Catalog">
+        </button>
+
+        <!-- Product Catalog Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="products" title="Products & Catalog">
           <i data-lucide="package"></i>
-        </a>
-        <a href="#inventory" class="nav-icon-link" data-nav="inventory" title="Inventory & Stock">
+        </button>
+
+        <!-- Inventory & Stock Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="inventory" title="Inventory & Stock">
           <i data-lucide="boxes"></i>
-        </a>
-        <a href="#customers" class="nav-icon-link" data-nav="customers" title="Customers & Debtors">
+        </button>
+
+        <!-- Customers & Debtors Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="customers" title="Customers & Debtors">
           <i data-lucide="users"></i>
-        </a>
-        <a href="#promotions" class="nav-icon-link" data-nav="promotions" title="Discounts & Plans">
+        </button>
+
+        <!-- Promotions & Plans Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="promotions" title="Discounts & Plans">
           <i data-lucide="tag"></i>
-        </a>
-        <a href="#employees" class="nav-icon-link" data-nav="employees" title="Employees & Roles">
+        </button>
+
+        <!-- Employees & Roles Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="employees" title="Employees & Roles">
           <i data-lucide="badge-percent"></i>
-        </a>
-        <a href="#settings" class="nav-icon-link" data-nav="settings" title="Store & Registers">
+        </button>
+
+        <!-- Settings Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="settings" title="Store & Registers">
           <i data-lucide="sliders-horizontal"></i>
-        </a>
+        </button>
       </nav>
 
       <div class="sidebar-bottom">
@@ -235,12 +251,71 @@
       </div>
     </aside>
 
+    <!-- Submenu Flyout Menu Panel -->
+    <div id="subnav-flyout" class="subnav-flyout-panel hidden">
+      <!-- Dynamic Flyout Lists -->
+      <div class="subnav-group hidden" data-flyout-parent="sales">
+        <div class="subnav-header">Sales Management</div>
+        <a href="#sales-summary" class="subnav-item" data-nav="sales-summary">Sales Overview</a>
+        <a href="#sales-summary" class="subnav-item" data-nav="sales-summary">Receipts & Transactions</a>
+        <a href="#sales-summary" class="subnav-item" data-nav="sales-summary">Sales History Report</a>
+      </div>
+
+      <div class="subnav-group hidden" data-flyout-parent="products">
+        <div class="subnav-header">Product Management</div>
+        <a href="#products" class="subnav-item" data-nav="products">All Products</a>
+        <a href="#products" class="subnav-item" data-nav="products">Categories & Brands</a>
+        <a href="#products" class="subnav-item" data-nav="products">Barcode Generator</a>
+      </div>
+
+      <div class="subnav-group hidden" data-flyout-parent="inventory">
+        <div class="subnav-header">Inventory Control</div>
+        <a href="#inventory" class="subnav-item" data-nav="inventory">Available Inventory</a>
+        <a href="#inventory" class="subnav-item" data-nav="inventory">Stock Adjustments (SA)</a>
+        <a href="#inventory" class="subnav-item" data-nav="inventory">Purchase Orders (PO)</a>
+        <a href="#inventory" class="subnav-item" data-nav="inventory">Goods Received Note (GRN)</a>
+        <a href="#inventory" class="subnav-item" data-nav="inventory">Suppliers & Credit</a>
+        <a href="#inventory" class="subnav-item" data-nav="inventory">Inventory Summary Report</a>
+      </div>
+
+      <div class="subnav-group hidden" data-flyout-parent="customers">
+        <div class="subnav-header">Customer Accounts</div>
+        <a href="#customers" class="subnav-item" data-nav="customers">Customer Directory</a>
+        <a href="#customers" class="subnav-item" data-nav="customers">Debtors & Store Credit</a>
+      </div>
+
+      <div class="subnav-group hidden" data-flyout-parent="promotions">
+        <div class="subnav-header">Promotions & Discounts</div>
+        <a href="#promotions" class="subnav-item" data-nav="promotions">Active Campaigns</a>
+        <a href="#promotions" class="subnav-item" data-nav="promotions">Discount Rules</a>
+      </div>
+
+      <div class="subnav-group hidden" data-flyout-parent="employees">
+        <div class="subnav-header">Staff & Security</div>
+        <a href="#employees" class="subnav-item" data-nav="employees">Employee List</a>
+        <a href="#employees" class="subnav-item" data-nav="employees">Roles & Permissions</a>
+      </div>
+
+      <div class="subnav-group hidden" data-flyout-parent="settings">
+        <div class="subnav-header">System Settings</div>
+        <a href="#settings" class="subnav-item" data-nav="settings">Store Profile</a>
+        <a href="#settings" class="subnav-item" data-nav="settings">Registers & Hardware</a>
+        <a href="#settings" class="subnav-item" data-nav="settings">Receipt Printer Drivers</a>
+      </div>
+    </div>
+
+    <!-- Submenu Backdrop -->
+    <div id="subnav-backdrop" class="subnav-backdrop hidden"></div>
+
     <!-- App Body -->
     <div class="main-content">
       
       <!-- Top Action Bar -->
       <header class="top-bar">
         <div class="top-bar-left">
+          <button class="btn-icon mobile-nav-toggle" id="btn-toggle-sidebar" title="Toggle Navigation">
+            <i data-lucide="menu"></i>
+          </button>
           <h2 id="current-view-title">Dashboard</h2>
           <span class="badge badge-teal" id="badge-active-shop">Main Store</span>
         </div>
