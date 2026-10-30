@@ -40,7 +40,7 @@ html, body {
 }
 
 /* ==========================================================================
-   Sidebar Navigation Rail (Desktop & Mobile Unified Side Layout)
+   Sidebar Navigation Rail
    ========================================================================== */
 .sidebar {
   width: var(--sidebar-width);
@@ -108,22 +108,21 @@ svg.lucide, i[data-lucide] {
 }
 
 /* ==========================================================================
-   Submenu Flyout Panel
+   Dynamic Submenu Flyout Panel
    ========================================================================== */
 .subnav-flyout-panel {
   position: fixed;
-  top: 16px;
   left: calc(var(--sidebar-width) + 12px);
   width: var(--subnav-width);
-  max-height: calc(100vh - 32px);
+  max-height: 80vh;
   background: #ffffff;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   z-index: var(--z-subnav);
   overflow-y: auto;
   padding: 12px 0;
-  transition: opacity var(--transition-fast), transform var(--transition-fast);
+  transition: opacity var(--transition-fast);
 }
 
 .subnav-flyout-panel.hidden {
@@ -168,7 +167,7 @@ svg.lucide, i[data-lucide] {
 .subnav-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.2);
+  background: rgba(15, 23, 42, 0.25);
   z-index: calc(var(--z-subnav) - 1);
 }
 
@@ -396,22 +395,20 @@ svg.lucide, i[data-lucide] {
 }
 
 /* ==========================================================================
-   Mobile & Tablet Responsiveness (< 768px)
+   Mobile Responsiveness (< 768px)
    ========================================================================== */
 @media (max-width: 768px) {
   :root {
     --drawer-width: 100vw;
-    --subnav-width: 220px;
+    --subnav-width: 240px;
   }
 
-  /* Show toggle hamburger button on mobile header */
   .mobile-nav-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
 
-  /* Sidebar slides off-screen on small devices when collapsed */
   .sidebar {
     position: fixed;
     top: 0;
@@ -420,8 +417,13 @@ svg.lucide, i[data-lucide] {
     box-shadow: 4px 0 16px rgba(0, 0, 0, 0.1);
   }
 
+  /* Make viewport take full width next to sidebar */
+  .main-content {
+    width: calc(100vw - var(--sidebar-width));
+    margin-left: var(--sidebar-width);
+  }
+
   .subnav-flyout-panel {
-    top: 12px;
     left: calc(var(--sidebar-width) + 8px);
     width: calc(100vw - var(--sidebar-width) - 24px);
   }
@@ -452,7 +454,6 @@ svg.lucide, i[data-lucide] {
 
   .viewport-area {
     padding: 16px;
-    padding-bottom: 24px;
   }
 
   .kpi-grid {
