@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- Lucide Icons CDN (Direct build) -->
+  <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
 
   <!-- Core Stylesheets -->
@@ -239,7 +239,7 @@
         </button>
 
         <!-- Settings Category Trigger -->
-        <button class="nav-icon-link" data-menu-trigger="settings" title="Store & Registers">
+        <button class="nav-icon-link" data-menu-trigger="settings" title="Store & System Settings">
           <i data-lucide="sliders-horizontal"></i>
         </button>
       </nav>
@@ -253,55 +253,94 @@
 
     <!-- Submenu Flyout Menu Panel -->
     <div id="subnav-flyout" class="subnav-flyout-panel hidden">
-      <!-- Dynamic Flyout Lists -->
+      
+      <!-- 1. Sales & Transactions Group -->
       <div class="subnav-group hidden" data-flyout-parent="sales">
         <div class="subnav-header">Sales Management</div>
         <a href="#sales-summary" class="subnav-item" data-nav="sales-summary">Sales Overview</a>
-        <a href="#sales-summary" class="subnav-item" data-nav="sales-summary">Receipts & Transactions</a>
-        <a href="#sales-summary" class="subnav-item" data-nav="sales-summary">Sales History Report</a>
+        <a href="#sales-summary?tab=receipts" class="subnav-item" data-nav="sales-summary">Receipts & Transactions</a>
+        <a href="#sales-summary?tab=history" class="subnav-item" data-nav="sales-summary">Sales History Report</a>
+        
+        <!-- Accordion Sub-Menu Dropdown -->
+        <div class="subnav-dropdown-toggle" data-dropdown-trigger="sales-reports">
+          <span>More Sales Reports</span>
+          <i data-lucide="chevron-down" class="dropdown-icon"></i>
+        </div>
+        <div class="subnav-dropdown-content hidden" data-dropdown-content="sales-reports">
+          <a href="#sales-summary?tab=shifts" class="subnav-subitem">Cashier Shift Reports</a>
+          <a href="#sales-summary?tab=refunds" class="subnav-subitem">Refunds & Voids Log</a>
+        </div>
       </div>
 
+      <!-- 2. Product Catalog Group -->
       <div class="subnav-group hidden" data-flyout-parent="products">
-        <div class="subnav-header">Product Management</div>
-        <a href="#products" class="subnav-item" data-nav="products">All Products</a>
-        <a href="#products" class="subnav-item" data-nav="products">Categories & Brands</a>
-        <a href="#products" class="subnav-item" data-nav="products">Barcode Generator</a>
+        <div class="subnav-header">Product Catalog</div>
+        <a href="#products" class="subnav-item" data-nav="products">Products List</a>
+        <a href="#products?tab=categories" class="subnav-item" data-nav="products">Categories & Brands</a>
+        <a href="#products?tab=modifiers" class="subnav-item" data-nav="products">Modifiers & Variants</a>
+        <a href="#products?tab=uom" class="subnav-item" data-nav="products">Units of Measurement (UOM)</a>
+        <a href="#products?tab=barcode" class="subnav-item" data-nav="products">Barcode Generator</a>
       </div>
 
+      <!-- 3. Inventory Control & Supply Group -->
       <div class="subnav-group hidden" data-flyout-parent="inventory">
         <div class="subnav-header">Inventory Control</div>
         <a href="#inventory" class="subnav-item" data-nav="inventory">Available Inventory</a>
-        <a href="#inventory" class="subnav-item" data-nav="inventory">Stock Adjustments (SA)</a>
-        <a href="#inventory" class="subnav-item" data-nav="inventory">Purchase Orders (PO)</a>
-        <a href="#inventory" class="subnav-item" data-nav="inventory">Goods Received Note (GRN)</a>
-        <a href="#inventory" class="subnav-item" data-nav="inventory">Suppliers & Credit</a>
-        <a href="#inventory" class="subnav-item" data-nav="inventory">Inventory Summary Report</a>
+        <a href="#inventory?tab=adjustments" class="subnav-item" data-nav="inventory">Stock Adjustments (SA)</a>
+        <a href="#inventory?tab=po" class="subnav-item" data-nav="inventory">Purchase Orders (PO)</a>
+        <a href="#inventory?tab=grn" class="subnav-item" data-nav="inventory">Goods Received Note (GRN)</a>
+        <a href="#inventory?tab=prn" class="subnav-item" data-nav="inventory">Purchase Return Note (PRN)</a>
+        <a href="#inventory?tab=tog" class="subnav-item" data-nav="inventory">Transfer of Goods (TOG)</a>
+        <a href="#inventory?tab=counts" class="subnav-item" data-nav="inventory">Inventory Counts</a>
+        <a href="#inventory?tab=suppliers" class="subnav-item" data-nav="inventory">Suppliers & Vendors</a>
+        <a href="#inventory?tab=credit" class="subnav-item" data-nav="inventory">Supplier Credit & Settlements</a>
+
+        <!-- Accordion Sub-Menu Dropdown -->
+        <div class="subnav-dropdown-toggle" data-dropdown-trigger="inventory-reports">
+          <span>Inventory Reports</span>
+          <i data-lucide="chevron-down" class="dropdown-icon"></i>
+        </div>
+        <div class="subnav-dropdown-content hidden" data-dropdown-content="inventory-reports">
+          <a href="#inventory?tab=history-report" class="subnav-subitem">Inventory History Report</a>
+          <a href="#inventory?tab=expiry-report" class="subnav-subitem">Inventory Expiry Report</a>
+          <a href="#inventory?tab=valuation-report" class="subnav-subitem">Inventory Valuation Report</a>
+          <a href="#inventory?tab=summary-report" class="subnav-subitem">Inventory Summary Report</a>
+          <a href="#inventory?tab=backdate-report" class="subnav-subitem">Backdate Inventory Report</a>
+        </div>
       </div>
 
+      <!-- 4. Customer Accounts Group -->
       <div class="subnav-group hidden" data-flyout-parent="customers">
         <div class="subnav-header">Customer Accounts</div>
         <a href="#customers" class="subnav-item" data-nav="customers">Customer Directory</a>
-        <a href="#customers" class="subnav-item" data-nav="customers">Debtors & Store Credit</a>
+        <a href="#customers?tab=debtors" class="subnav-item" data-nav="customers">Debtors & Store Credit</a>
+        <a href="#customers?tab=groups" class="subnav-item" data-nav="customers">Customer Groups & Loyalty</a>
       </div>
 
+      <!-- 5. Promotions & Discounts Group -->
       <div class="subnav-group hidden" data-flyout-parent="promotions">
         <div class="subnav-header">Promotions & Discounts</div>
         <a href="#promotions" class="subnav-item" data-nav="promotions">Active Campaigns</a>
-        <a href="#promotions" class="subnav-item" data-nav="promotions">Discount Rules</a>
+        <a href="#promotions?tab=rules" class="subnav-item" data-nav="promotions">Discount Rules</a>
       </div>
 
+      <!-- 6. Staff & Security Group -->
       <div class="subnav-group hidden" data-flyout-parent="employees">
         <div class="subnav-header">Staff & Security</div>
         <a href="#employees" class="subnav-item" data-nav="employees">Employee List</a>
-        <a href="#employees" class="subnav-item" data-nav="employees">Roles & Permissions</a>
+        <a href="#employees?tab=roles" class="subnav-item" data-nav="employees">Roles & Permissions</a>
+        <a href="#employees?tab=shifts" class="subnav-item" data-nav="employees">Staff Performance & Shifts</a>
       </div>
 
+      <!-- 7. System & Store Setup Group -->
       <div class="subnav-group hidden" data-flyout-parent="settings">
-        <div class="subnav-header">System Settings</div>
-        <a href="#settings" class="subnav-item" data-nav="settings">Store Profile</a>
-        <a href="#settings" class="subnav-item" data-nav="settings">Registers & Hardware</a>
-        <a href="#settings" class="subnav-item" data-nav="settings">Receipt Printer Drivers</a>
+        <div class="subnav-header">System Setup</div>
+        <a href="#settings" class="subnav-item" data-nav="settings">Store Profile & Business Info</a>
+        <a href="#settings?tab=terminals" class="subnav-item" data-nav="settings">POS Registers & Terminals</a>
+        <a href="#settings?tab=hardware" class="subnav-item" data-nav="settings">Receipt Printer Drivers</a>
+        <a href="#settings?tab=taxes" class="subnav-item" data-nav="settings">Taxes & Fiscal Configuration</a>
       </div>
+
     </div>
 
     <!-- Submenu Backdrop -->
