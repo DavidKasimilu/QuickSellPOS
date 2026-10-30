@@ -118,7 +118,7 @@ svg.lucide, i[data-lucide] {
 }
 
 /* ==========================================================================
-   Dynamic Submenu Flyout Panel (Scrollable Container)
+   Dynamic Submenu Flyout Panel (Viewport Bound & Scrollable Container)
    ========================================================================== */
 .subnav-flyout-panel {
   position: fixed;
@@ -132,6 +132,7 @@ svg.lucide, i[data-lucide] {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
   z-index: var(--z-subnav);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px 0;
   transition: transform var(--transition-smooth), opacity var(--transition-fast);
 }
@@ -141,35 +142,52 @@ svg.lucide, i[data-lucide] {
   left: 12px;
 }
 
-/* Scrollbar styling for long sub-menu lists */
-.subnav-flyout-panel::-webkit-scrollbar {
-  width: 6px;
-}
-
-.subnav-flyout-panel::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 0 12px 12px 0;
-}
-
-.subnav-flyout-panel::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.subnav-flyout-panel::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-.subnav-flyout-panel.hidden {
-  display: none !important;
-}
-
+/* Max 5 visible items for Submenu Groups & Accordion Dropdowns */
 .subnav-group {
   display: flex;
   flex-direction: column;
 }
 
-.subnav-group.hidden {
+.subnav-dropdown-content {
+  display: flex;
+  flex-direction: column;
+  background-color: #fafafa;
+  padding: 4px 0;
+  max-height: min(210px, calc(100vh - 120px)); /* ~5 items @ 42px each */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Custom Scrollbar styling for long sub-menu lists */
+.subnav-flyout-panel::-webkit-scrollbar,
+.subnav-dropdown-content::-webkit-scrollbar,
+.subnav-group::-webkit-scrollbar {
+  width: 6px;
+}
+
+.subnav-flyout-panel::-webkit-scrollbar-track,
+.subnav-dropdown-content::-webkit-scrollbar-track,
+.subnav-group::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.subnav-flyout-panel::-webkit-scrollbar-thumb,
+.subnav-dropdown-content::-webkit-scrollbar-thumb,
+.subnav-group::-webkit-scrollbar-thumb {
+  background: var(--teal-600, #0d9488);
+  border-radius: 8px;
+}
+
+.subnav-flyout-panel::-webkit-scrollbar-thumb:hover,
+.subnav-dropdown-content::-webkit-scrollbar-thumb:hover,
+.subnav-group::-webkit-scrollbar-thumb:hover {
+  background: var(--teal-700, #0f766e);
+}
+
+.subnav-flyout-panel.hidden,
+.subnav-group.hidden,
+.subnav-dropdown-content.hidden {
   display: none !important;
 }
 
@@ -231,17 +249,6 @@ svg.lucide, i[data-lucide] {
   transform: rotate(180deg);
 }
 
-.subnav-dropdown-content {
-  display: flex;
-  flex-direction: column;
-  background-color: #fafafa;
-  padding: 4px 0;
-}
-
-.subnav-dropdown-content.hidden {
-  display: none !important;
-}
-
 .subnav-subitem {
   display: block;
   padding: 8px 16px 8px 28px;
@@ -270,13 +277,14 @@ svg.lucide, i[data-lucide] {
 }
 
 /* ==========================================================================
-   Main Content Workspace (Adjusts dynamically when side nav toggles)
+   Main Content Workspace (Allows Full Bottom Scrolling for Sales Views)
    ========================================================================== */
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   height: 100vh;
+  min-height: 0;
   overflow: hidden;
   background-color: var(--bg-canvas);
   margin-left: var(--sidebar-width);
@@ -394,7 +402,9 @@ svg.lucide, i[data-lucide] {
 .viewport-area {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding: 24px;
+  padding-bottom: 96px; /* Generous padding to prevent clipping at bottom of screen */
   position: relative;
 }
 
@@ -530,6 +540,7 @@ svg.lucide, i[data-lucide] {
   .subnav-flyout-panel {
     left: 12px;
     width: calc(100vw - 24px);
+    max-height: calc(100vh - 70px);
   }
 
   .top-bar {
@@ -558,6 +569,7 @@ svg.lucide, i[data-lucide] {
 
   .viewport-area {
     padding: 16px;
+    padding-bottom: 110px;
   }
 
   .kpi-grid {
