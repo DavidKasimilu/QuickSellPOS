@@ -14,12 +14,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.lucide.createIcons();
   }
 
-  // 2. Bind DOM Handlers
+  // 2. Bind DOM Handlers & Navigation Interactions
   bindAuthFormTransitions();
   bindAuthActions();
   bindProfileDrawer();
   bindDateFilters();
   bindGlobalNavActions();
+  bindSidebarFlyoutMenu();
 
   // 3. Subscribe UI updates to Global State
   globalState.subscribe((state) => {
@@ -51,6 +52,86 @@ document.addEventListener('DOMContentLoaded', async () => {
     showAuthOverlay(true);
   }
 });
+
+// =========================================================================
+// Sidebar Flyout Navigation Submenu Logic
+// =========================================================================
+function bindSidebarFlyoutMenu() {
+  const triggers = document.querySelectorAll('[data-menu-trigger]');
+  const flyoutPanel = document.getElementById('subnav-flyout');
+  const flyoutGroups = document.querySelectorAll('[data-flyout-parent]');
+  const backdrop = document.getElementById('subnav-backdrop');
+  const toggleMobileSidebarBtn = document.getElementById('btn-toggle-sidebar');
+  const sidebar = document.getElementById('main-sidebar');
+
+  function closeFlyout() {
+    if (flyoutPanel) flyoutPanel.classList.add('hidden');
+    if (backdrop) backdrop.classList.add('hidden');
+    triggers.forEach((btn) => btn.classList.remove('active'));
+  }
+
+  function openFlyout(categoryKey, targetBtn) {
+    let hasGroup = false;
+
+    flyoutGroups.forEach((group) => {
+      if (group.dataset.flyoutParent === categoryKey) {
+        group.classList.remove('hidden');
+        hasGroup = true;
+      } else {
+        group.classList.add('hidden');
+      }
+    });
+
+    if (hasGroup) {
+      triggers.forEach((btn) => btn.classList.remove('active'));
+      if (targetBtn) targetBtn.classList.add('active');
+      
+      if (flyoutPanel) flyoutPanel.classList.remove('hidden');
+      if (backdrop) backdrop.classList.remove('hidden');
+    } else {
+      closeFlyout();
+    }
+  }
+
+  triggers.forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const categoryKey = btn.dataset.menuTrigger;
+
+      if (btn.classList.contains('active') && flyoutPanel && !flyoutPanel.classList.contains('hidden')) {
+        closeFlyout();
+      } else {
+        openFlyout(categoryKey, btn);
+      }
+    });
+  });
+
+  // Handle clicks on subnav links
+  const subnavItems = document.querySelectorAll('.subnav-item');
+  subnavItems.forEach((item) => {
+    item.addEventListener('click', () => {
+      closeFlyout();
+    });
+  });
+
+  // Close flyout on backdrop or outside click
+  if (backdrop) {
+    backdrop.addEventListener('click', closeFlyout);
+  }
+
+  document.addEventListener('click', (e) => {
+    if (flyoutPanel && !flyoutPanel.contains(e.target) && !e.target.closest('[data-menu-trigger]')) {
+      closeFlyout();
+    }
+  });
+
+  // Mobile sidebar drawer toggle button
+  if (toggleMobileSidebarBtn && sidebar) {
+    toggleMobileSidebarBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('mobile-open');
+    });
+  }
+}
 
 // =========================================================================
 // Supabase Real-Time Channel Synchronization
