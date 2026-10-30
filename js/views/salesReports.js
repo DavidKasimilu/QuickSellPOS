@@ -4,6 +4,8 @@ import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
 import { PrinterDriver } from '../components/PrinterDriver.js';
+import { Exporter } from '../components/Exporter.js';
+import { PieChart } from '../components/PieChart.js';
 
 export async function mount(container, activeTab = 'sales-summary', queryParams = new URLSearchParams()) {
   const currency = globalState.preferences.currency || 'KES';
@@ -22,6 +24,12 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   let customersList = [];
   let cashiersList = [];
 
+  // Active Report Data Buffer for Exports
+  let currentReportData = [];
+  let currentReportColumns = [];
+  let currentReportTitle = 'Sales Report';
+  let currentSummaryMeta = null;
+
   // Fetch Customers & Cashiers for Filter Dropdowns
   try {
     let custQuery = supabase.from('customers').select('id, name, phone').order('name');
@@ -39,7 +47,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     console.warn('Failed to load filter options:', e);
   }
 
-  // Render Page Layout with Sticky Filter Bar
+  // Render Page Layout with Filter Bar & Universal Export Bar
   container.innerHTML = `
     <!-- Top Filter Controls Bar -->
     <div class="card" style="padding: 16px; margin-bottom: 20px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px;">
@@ -97,22 +105,45 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       </div>
     </div>
 
-    <!-- Live Status & Dynamic Action Container -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <!-- Export & Live Status Bar -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
       <div>
         <span class="live-indicator" style="font-size: 0.75rem; color: var(--teal-600); display: inline-flex; align-items: center; gap: 4px;">
           <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--teal-600);"></span>
-          Live Analytics Stream
+          Live Sales Analytics
         </span>
       </div>
-      <div id="sales-action-container"></div>
+      
+      <!-- Global Export Action Buttons -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button id="btn-export-csv" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8125rem;">
+          <i data-lucide="file-spreadsheet" style="width: 14px; height: 14px; margin-right: 4px;"></i> Export CSV
+        </button>
+        <button id="btn-export-pdf" class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8125rem;">
+          <i data-lucide="printer" style="width: 14px; height: 14px; margin-right: 4px;"></i> Export / Print PDF
+        </button>
+        <div id="sales-action-container"></div>
+      </div>
     </div>
+
+    <!-- Interactive Visual Analytics (Pie / Donut Chart Container) -->
+    <div id="sales-chart-container"></div>
 
     <!-- Main Table / Chart Data Target Area -->
     <div class="chart-box" style="padding: 0;">
       <div id="sales-table-content"></div>
     </div>
   `;
+
+  // Bind Export Buttons
+  container.querySelector('#btn-export-csv').onclick = () => {
+    Exporter.exportToCSV(`${activeTab}_report.csv`, currentReportData, currentReportColumns);
+    Toast.success('CSV Report exported successfully.');
+  };
+
+  container.querySelector('#btn-export-pdf').onclick = () => {
+    Exporter.exportToPDF(currentReportTitle, currentReportData, currentReportColumns, currentSummaryMeta);
+  };
 
   // Bind Filter Events
   const presetChips = container.querySelectorAll('[data-preset]');
@@ -164,12 +195,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     loadView();
   };
 
-  // Subscribe to realtime state updates
-  unsubs.push(
-    globalState.subscribeKey('orders', () => loadView())
-  );
+  unsubs.push(globalState.subscribeKey('orders', () => loadView()));
 
-  // Core Helper: Apply base query filters across reports
   function applyBaseOrderFilters(query) {
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
     if (dateStart) query = query.gte('created_at', `${dateStart}T00:00:00.000Z`);
@@ -179,117 +206,142 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     return query;
   }
 
-  // Load Active View Function
   async function loadView() {
     const tableArea = document.getElementById('sales-table-content');
+    const chartArea = document.getElementById('sales-chart-container');
     const actionArea = document.getElementById('sales-action-container');
     if (!tableArea || !actionArea) return;
 
     actionArea.innerHTML = '';
+    chartArea.innerHTML = '';
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Loading ${activeTab.replace(/-/g, ' ')}...</p>`;
 
     switch (activeTab) {
       case 'sales-summary':
-        await renderSalesSummary(tableArea);
+        currentReportTitle = 'Sales Summary Overview';
+        await renderSalesSummary(tableArea, chartArea);
         break;
 
       case 'receipts':
-        await renderReceipts(tableArea);
+        currentReportTitle = 'Completed Receipts';
+        await renderReceipts(tableArea, chartArea);
         break;
 
       case 'refunds':
-        await renderRefunds(tableArea);
+        currentReportTitle = 'Refunds & Credit Notes Log';
+        await renderRefunds(tableArea, chartArea);
         break;
 
       case 'sales-by-product':
-        await renderSalesByProduct(tableArea);
+        currentReportTitle = 'Sales Distribution by Product';
+        await renderSalesByProduct(tableArea, chartArea);
         break;
 
       case 'sales-by-category':
-        await renderSalesByCategory(tableArea);
+        currentReportTitle = 'Sales Distribution by Category';
+        await renderSalesByCategory(tableArea, chartArea);
         break;
 
       case 'sales-by-discount':
-        await renderSalesByDiscount(tableArea);
+        currentReportTitle = 'Discounts & Promotions Report';
+        await renderSalesByDiscount(tableArea, chartArea);
         break;
 
       case 'sales-by-payment-type':
-        await renderSalesByPaymentType(tableArea);
+        currentReportTitle = 'Sales Volume by Payment Method';
+        await renderSalesByPaymentType(tableArea, chartArea);
         break;
 
       case 'taxes':
-        await renderTaxesReport(tableArea);
+        currentReportTitle = 'Tax Breakdown Report';
+        await renderTaxesReport(tableArea, chartArea);
         break;
 
       case 'charges':
-        await renderStoreChargesReport(tableArea);
+        currentReportTitle = 'Store Charges & Service Fees';
+        await renderStoreChargesReport(tableArea, chartArea);
         break;
 
       case 'shifts':
+        currentReportTitle = 'Cashier Shift Audit Log';
         actionArea.innerHTML = `
           <button class="btn btn-teal-primary" id="btn-open-shift">
             <i data-lucide="key-round" style="width:16px; height:16px; margin-right:6px;"></i> Start / Close Shift
           </button>
         `;
         document.getElementById('btn-open-shift').onclick = () => openShiftModal();
-        await renderShiftsReport(tableArea);
+        await renderShiftsReport(tableArea, chartArea);
         break;
 
       case 'product-wise-receipts':
-        await renderProductWiseReceipts(tableArea);
+        currentReportTitle = 'Product Wise Receipts';
+        await renderProductWiseReceipts(tableArea, chartArea);
         break;
 
       case 'sales-by-trends':
-        await renderSalesByTrends(tableArea);
+        currentReportTitle = '24-Hour Trading Trends';
+        await renderSalesByTrends(tableArea, chartArea);
         break;
 
       case 'deleted-receipts':
-        await renderDeletedReceipts(tableArea);
+        currentReportTitle = 'Audit: Deleted & Voided Receipts';
+        await renderDeletedReceipts(tableArea, chartArea);
         break;
 
       case 'order-type-wise-sales':
-        await renderOrderTypeWiseSales(tableArea);
+        currentReportTitle = 'Order Type Channel Distribution';
+        await renderOrderTypeWiseSales(tableArea, chartArea);
         break;
 
       case 'product-wise-tax':
-        await renderProductWiseTax(tableArea);
+        currentReportTitle = 'Product Wise Tax Generated';
+        await renderProductWiseTax(tableArea, chartArea);
         break;
 
       case 'manual-receipts':
-        await renderManualReceipts(tableArea);
+        currentReportTitle = 'Manual & Offline Synced Receipts';
+        await renderManualReceipts(tableArea, chartArea);
         break;
 
       case 'sales-by-orders':
       case 'product-wise-orders':
-        await renderSalesByOrders(tableArea);
+        currentReportTitle = 'Sales by Orders';
+        await renderSalesByOrders(tableArea, chartArea);
         break;
 
       case 'sales-by-modifiers':
-        await renderSalesByModifiers(tableArea);
+        currentReportTitle = 'Sales by Modifiers & Variants';
+        await renderSalesByModifiers(tableArea, chartArea);
         break;
 
       case 'product-sales-by-other-staff':
-        await renderAuxiliaryStaffSales(tableArea);
+        currentReportTitle = 'Auxiliary Staff Attributed Sales';
+        await renderAuxiliaryStaffSales(tableArea, chartArea);
         break;
 
       case 'ecommerce-sales':
-        await renderEcommerceSales(tableArea);
+        currentReportTitle = 'E-Commerce & Delivery Sales';
+        await renderEcommerceSales(tableArea, chartArea);
         break;
 
       case 'product-wise-deleted-receipts':
-        await renderProductWiseDeletedReceipts(tableArea);
+        currentReportTitle = 'Suspicious: Product Wise Deleted Line Items';
+        await renderProductWiseDeletedReceipts(tableArea, chartArea);
         break;
 
       case 'refund-and-credit-notes':
-        await renderRefundAndCreditNotes(tableArea);
+        currentReportTitle = 'Suspicious: Debt Settlement & Credit Notes';
+        await renderRefundAndCreditNotes(tableArea, chartArea);
         break;
 
       case 'deleted-products-in-open-orders':
-        await renderDeletedProductsInOpenOrders(tableArea);
+        currentReportTitle = 'Suspicious: Discarded Cart Items';
+        await renderDeletedProductsInOpenOrders(tableArea, chartArea);
         break;
 
       default:
-        await renderSalesSummary(tableArea);
+        currentReportTitle = 'Sales Summary Overview';
+        await renderSalesSummary(tableArea, chartArea);
         break;
     }
 
@@ -297,12 +349,11 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   // =========================================================================
-  // REPORT IMPLEMENTATIONS
+  // VIEW RENDERERS & PIE CHART INTEGRATION
   // =========================================================================
 
-  // 1. Sales Summary KPI Dashboard
-  async function renderSalesSummary(target) {
-    let query = supabase.from('orders').select('subtotal, discount_amount, tax_amount, total').eq('is_deleted', false).eq('order_status', 'completed');
+  async function renderSalesSummary(target, chartTarget) {
+    let query = supabase.from('orders').select('subtotal, discount_amount, tax_amount, total, service_type').eq('is_deleted', false).eq('order_status', 'completed');
     query = applyBaseOrderFilters(query);
 
     const { data: orders, error } = await query;
@@ -312,12 +363,27 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     }
 
     let grossSales = 0, discounts = 0, taxes = 0, netSales = 0;
+    const channelMap = {};
+
     orders?.forEach((o) => {
       grossSales += Number(o.subtotal || 0);
       discounts += Number(o.discount_amount || 0);
       taxes += Number(o.tax_amount || 0);
       netSales += Number(o.total || 0);
+
+      const ch = (o.service_type || 'walk_in').toUpperCase();
+      channelMap[ch] = (channelMap[ch] || 0) + Number(o.total || 0);
     });
+
+    currentSummaryMeta = {
+      'Gross Sales': `${grossSales.toLocaleString()} ${currency}`,
+      'Discounts': `-${discounts.toLocaleString()} ${currency}`,
+      'Taxes Billed': `${taxes.toLocaleString()} ${currency}`,
+      'Net Revenue': `${netSales.toLocaleString()} ${currency}`,
+    };
+
+    const chartSeries = Object.entries(channelMap).map(([label, value]) => ({ label, value }));
+    PieChart.render(chartTarget, chartSeries, { title: 'Revenue Share by Order Channel', currency });
 
     target.innerHTML = `
       <div style="padding:24px;">
@@ -343,8 +409,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     `;
   }
 
-  // 2. Receipts List
-  async function renderReceipts(target) {
+  async function renderReceipts(target, chartTarget) {
     let query = supabase.from('orders').select('*, customers(name), profiles(full_name)').eq('is_deleted', false).order('created_at', { ascending: false });
     query = applyBaseOrderFilters(query);
 
@@ -353,6 +418,16 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = orders || [];
+    currentReportColumns = [
+      { label: 'Receipt #', key: 'receipt_no' },
+      { label: 'Date', key: 'created_at' },
+      { label: 'Customer', key: 'customers' },
+      { label: 'Cashier', key: 'profiles' },
+      { label: 'Total Billed', key: 'total' },
+      { label: 'Status', key: 'order_status' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -372,8 +447,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  // 3. Refunds Report
-  async function renderRefunds(target) {
+  async function renderRefunds(target, chartTarget) {
     let query = supabase.from('orders').select('*, customers(name), profiles(full_name)').eq('order_status', 'refunded').order('created_at', { ascending: false });
     query = applyBaseOrderFilters(query);
 
@@ -382,6 +456,15 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = refunds || [];
+    currentReportColumns = [
+      { label: 'Receipt #', key: 'receipt_no' },
+      { label: 'Date', key: 'created_at' },
+      { label: 'Customer', key: 'customers' },
+      { label: 'Staff', key: 'profiles' },
+      { label: 'Refund Total', key: 'total' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -393,11 +476,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Refund Amount', key: 'total', render: (v) => `<span style="color:var(--color-danger); font-weight:600;">-${Number(v).toLocaleString()} ${currency}</span>` },
       ],
       data: refunds || [],
+      onAction: (a, id) => {
+        const order = refunds.find((o) => o.id === id);
+        if (order) viewReceiptModal(order);
+      }
     });
   }
 
-  // 4. Sales by Product
-  async function renderSalesByProduct(target) {
+  async function renderSalesByProduct(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, quantity, total, orders!inner(shop_id, created_at, customer_id, cashier_id, is_deleted)').eq('orders.is_deleted', false);
     if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
     if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
@@ -416,6 +502,17 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       map[i.product_name].revenue += Number(i.total || 0);
     });
 
+    const rows = Object.values(map);
+    currentReportData = rows;
+    currentReportColumns = [
+      { label: 'Product Name', key: 'name' },
+      { label: 'Units Sold', key: 'qty' },
+      { label: 'Revenue', key: 'revenue' }
+    ];
+
+    const chartSeries = rows.sort((a, b) => b.revenue - a.revenue).slice(0, 6).map(r => ({ label: r.name, value: r.revenue }));
+    PieChart.render(chartTarget, chartSeries, { title: 'Top Products Revenue Contribution', currency });
+
     renderDataTable({
       targetId: 'sales-table-content',
       columns: [
@@ -423,12 +520,11 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Units Sold', key: 'qty' },
         { label: 'Total Revenue', key: 'revenue', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
       ],
-      data: Object.values(map),
+      data: rows,
     });
   }
 
-  // 5. Sales by Category
-  async function renderSalesByCategory(target) {
+  async function renderSalesByCategory(target, chartTarget) {
     let query = supabase.from('order_items').select('quantity, total, products(categories(name)), orders!inner(shop_id, created_at, is_deleted)').eq('orders.is_deleted', false);
     if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
     if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
@@ -448,6 +544,17 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       map[cat].revenue += Number(i.total || 0);
     });
 
+    const rows = Object.values(map);
+    currentReportData = rows;
+    currentReportColumns = [
+      { label: 'Category', key: 'category' },
+      { label: 'Units Sold', key: 'qty' },
+      { label: 'Total Revenue', key: 'revenue' }
+    ];
+
+    const chartSeries = rows.map(r => ({ label: r.category, value: r.revenue }));
+    PieChart.render(chartTarget, chartSeries, { title: 'Sales Volume by Category', currency });
+
     renderDataTable({
       targetId: 'sales-table-content',
       columns: [
@@ -455,12 +562,11 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Units Sold', key: 'qty' },
         { label: 'Total Sales', key: 'revenue', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
       ],
-      data: Object.values(map),
+      data: rows,
     });
   }
 
-  // 6. Sales by Discount
-  async function renderSalesByDiscount(target) {
+  async function renderSalesByDiscount(target, chartTarget) {
     let query = supabase.from('orders').select('receipt_no, subtotal, discount_amount, total, created_at').gt('discount_amount', 0).eq('is_deleted', false);
     query = applyBaseOrderFilters(query);
 
@@ -469,6 +575,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = orders || [];
+    currentReportColumns = [
+      { label: 'Receipt #', key: 'receipt_no' },
+      { label: 'Original Subtotal', key: 'subtotal' },
+      { label: 'Discount Amount', key: 'discount_amount' },
+      { label: 'Billed Total', key: 'total' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -482,8 +596,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  // 7. Sales by Payment Type
-  async function renderSalesByPaymentType(target) {
+  async function renderSalesByPaymentType(target, chartTarget) {
     let query = supabase.from('payments').select('amount, payment_method, orders!inner(shop_id, created_at, customer_id, cashier_id)').eq('orders.is_deleted', false);
     if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
     if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
@@ -502,6 +615,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
 
     const rows = Object.entries(map).map(([m, val]) => ({ method: m, total: val }));
+    currentReportData = rows;
+    currentReportColumns = [
+      { label: 'Payment Method', key: 'method' },
+      { label: 'Total Volume', key: 'total' }
+    ];
+
+    const chartSeries = rows.map(r => ({ label: r.method, value: r.total }));
+    PieChart.render(chartTarget, chartSeries, { title: 'Payment Channel Breakdown', currency });
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -513,8 +634,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  // 8. Taxes Report
-  async function renderTaxesReport(target) {
+  async function renderTaxesReport(target, chartTarget) {
     let query = supabase.from('orders').select('receipt_no, subtotal, tax_amount, total, created_at').gt('tax_amount', 0).eq('is_deleted', false);
     query = applyBaseOrderFilters(query);
 
@@ -523,6 +643,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = orders || [];
+    currentReportColumns = [
+      { label: 'Receipt #', key: 'receipt_no' },
+      { label: 'Taxable Amount', key: 'subtotal' },
+      { label: 'Tax Collected', key: 'tax_amount' },
+      { label: 'Grand Total', key: 'total' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -536,8 +664,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  // 9. Charges Report
-  async function renderStoreChargesReport(target) {
+  async function renderStoreChargesReport(target, chartTarget) {
     let query = supabase.from('store_charges').select('*');
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
@@ -546,6 +673,13 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = charges || [];
+    currentReportColumns = [
+      { label: 'Charge Name', key: 'name' },
+      { label: 'Rate Type', key: 'rate_type' },
+      { label: 'Amount/Rate', key: 'amount' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -559,8 +693,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  // 10. Shifts Report
-  async function renderShiftsReport(target) {
+  async function renderShiftsReport(target, chartTarget) {
     let query = supabase.from('shifts').select('*, profiles(full_name)').order('opened_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
@@ -569,6 +702,15 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = shifts || [];
+    currentReportColumns = [
+      { label: 'Cashier', key: 'profiles' },
+      { label: 'Opened At', key: 'opened_at' },
+      { label: 'Closed At', key: 'closed_at' },
+      { label: 'Opening Float', key: 'opening_cash' },
+      { label: 'Actual Cash', key: 'actual_cash' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -584,7 +726,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   // ADVANCED SALES REPORTS
-  async function renderProductWiseReceipts(target) {
+  async function renderProductWiseReceipts(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, quantity, unit_price, total, orders!inner(receipt_no, created_at)').order('id', { ascending: false });
     if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
 
@@ -593,6 +735,15 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = data || [];
+    currentReportColumns = [
+      { label: 'Receipt #', key: 'orders' },
+      { label: 'Product Name', key: 'product_name' },
+      { label: 'Qty', key: 'quantity' },
+      { label: 'Unit Price', key: 'unit_price' },
+      { label: 'Line Total', key: 'total' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -607,7 +758,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  async function renderSalesByTrends(target) {
+  async function renderSalesByTrends(target, chartTarget) {
     let query = supabase.from('orders').select('created_at, total').eq('order_status', 'completed');
     query = applyBaseOrderFilters(query);
 
@@ -636,7 +787,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     target.innerHTML = `<div style="padding:24px;"><h4 style="margin-bottom:16px;">Sales Trend Curve</h4><div style="display:flex; gap:6px;">${bars}</div></div>`;
   }
 
-  async function renderDeletedReceipts(target) {
+  async function renderDeletedReceipts(target, chartTarget) {
     let query = supabase.from('orders').select('*, profiles(full_name)').eq('is_deleted', true).order('deleted_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
@@ -645,6 +796,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = data || [];
+    currentReportColumns = [
+      { label: 'Voided Receipt #', key: 'receipt_no' },
+      { label: 'Amount', key: 'total' },
+      { label: 'Reason', key: 'deleted_reason' },
+      { label: 'Deleted At', key: 'deleted_at' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -655,10 +814,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Deleted At', key: 'deleted_at', render: (d) => new Date(d).toLocaleString() },
       ],
       data: data || [],
+      onAction: (a, id) => {
+        const order = data.find((o) => o.id === id);
+        if (order) viewReceiptModal(order);
+      }
     });
   }
 
-  async function renderOrderTypeWiseSales(target) {
+  async function renderOrderTypeWiseSales(target, chartTarget) {
     let query = supabase.from('orders').select('service_type, total').eq('order_status', 'completed');
     query = applyBaseOrderFilters(query);
 
@@ -675,6 +838,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
 
     const rows = Object.entries(map).map(([type, total]) => ({ type, total }));
+    currentReportData = rows;
+    currentReportColumns = [
+      { label: 'Order Type', key: 'type' },
+      { label: 'Total Volume', key: 'total' }
+    ];
+
+    const chartSeries = rows.map(r => ({ label: r.type, value: r.total }));
+    PieChart.render(chartTarget, chartSeries, { title: 'Order Channel Revenue Share', currency });
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -686,7 +857,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  async function renderProductWiseTax(target) {
+  async function renderProductWiseTax(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, tax_rate, total, orders!inner(shop_id, created_at, is_deleted)').eq('orders.is_deleted', false);
     if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
 
@@ -704,6 +875,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       map[name].totalTax += taxBilled;
     });
 
+    const rows = Object.values(map);
+    currentReportData = rows;
+    currentReportColumns = [
+      { label: 'Product Name', key: 'name' },
+      { label: 'Tax Rate', key: 'taxRate' },
+      { label: 'Total Tax', key: 'totalTax' }
+    ];
+
     renderDataTable({
       targetId: 'sales-table-content',
       columns: [
@@ -711,11 +890,11 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Tax Rate', key: 'taxRate', render: (v) => `${v}%` },
         { label: 'Total Tax Generated', key: 'totalTax', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
       ],
-      data: Object.values(map),
+      data: rows,
     });
   }
 
-  async function renderManualReceipts(target) {
+  async function renderManualReceipts(target, chartTarget) {
     let query = supabase.from('orders').select('*').eq('synced_from_offline', true);
     query = applyBaseOrderFilters(query);
 
@@ -725,6 +904,13 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       return;
     }
 
+    currentReportData = data || [];
+    currentReportColumns = [
+      { label: 'Receipt #', key: 'receipt_no' },
+      { label: 'Total', key: 'total' },
+      { label: 'Synced Date', key: 'created_at' }
+    ];
+
     renderDataTable({
       targetId: 'sales-table-content',
       columns: [
@@ -733,18 +919,22 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Synced At', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
       ],
       data: data || [],
+      onAction: (a, id) => {
+        const order = data.find((o) => o.id === id);
+        if (order) viewReceiptModal(order);
+      }
     });
   }
 
-  async function renderSalesByOrders(target) {
-    await renderReceipts(target);
+  async function renderSalesByOrders(target, chartTarget) {
+    await renderReceipts(target, chartTarget);
   }
 
-  async function renderSalesByModifiers(target) {
+  async function renderSalesByModifiers(target, chartTarget) {
     target.innerHTML = `<p style="padding:24px; color:var(--text-muted);">No modifier item orders recorded in selected period.</p>`;
   }
 
-  async function renderAuxiliaryStaffSales(target) {
+  async function renderAuxiliaryStaffSales(target, chartTarget) {
     let query = supabase.from('orders').select('*, auxiliary_staff(full_name)').not('auxiliary_staff_id', 'is', null);
     query = applyBaseOrderFilters(query);
 
@@ -753,6 +943,13 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--text-muted);">No sales mapped to auxiliary staff for this range.</p>`;
       return;
     }
+
+    currentReportData = data || [];
+    currentReportColumns = [
+      { label: 'Auxiliary Staff', key: 'auxiliary_staff' },
+      { label: 'Receipt #', key: 'receipt_no' },
+      { label: 'Billed Amount', key: 'total' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -765,7 +962,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  async function renderEcommerceSales(target) {
+  async function renderEcommerceSales(target, chartTarget) {
     let query = supabase.from('orders').select('*').eq('service_type', 'delivery');
     query = applyBaseOrderFilters(query);
 
@@ -775,6 +972,13 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       return;
     }
 
+    currentReportData = data || [];
+    currentReportColumns = [
+      { label: 'Order #', key: 'receipt_no' },
+      { label: 'Total', key: 'total' },
+      { label: 'Date', key: 'created_at' }
+    ];
+
     renderDataTable({
       targetId: 'sales-table-content',
       columns: [
@@ -783,11 +987,15 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Date', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
       ],
       data: data || [],
+      onAction: (a, id) => {
+        const order = data.find((o) => o.id === id);
+        if (order) viewReceiptModal(order);
+      }
     });
   }
 
   // SUSPICIOUS AUDIT REPORTS
-  async function renderProductWiseDeletedReceipts(target) {
+  async function renderProductWiseDeletedReceipts(target, chartTarget) {
     let query = supabase.from('deleted_order_items').select('*, profiles(full_name)').order('created_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
@@ -796,6 +1004,14 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = data || [];
+    currentReportColumns = [
+      { label: 'Product Name', key: 'product_name' },
+      { label: 'Qty', key: 'quantity' },
+      { label: 'Staff', key: 'profiles' },
+      { label: 'Reason', key: 'reason' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -810,7 +1026,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  async function renderRefundAndCreditNotes(target) {
+  async function renderRefundAndCreditNotes(target, chartTarget) {
     let query = supabase.from('debtor_settlements').select('*, customers(name)').order('created_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
@@ -819,6 +1035,13 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = data || [];
+    currentReportColumns = [
+      { label: 'Settlement #', key: 'settlement_no' },
+      { label: 'Customer', key: 'customers' },
+      { label: 'Credit Amount', key: 'amount' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -832,7 +1055,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  async function renderDeletedProductsInOpenOrders(target) {
+  async function renderDeletedProductsInOpenOrders(target, chartTarget) {
     let query = supabase.from('cart_discard_logs').select('*, profiles(full_name)').order('created_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
@@ -841,6 +1064,15 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
       return;
     }
+
+    currentReportData = data || [];
+    currentReportColumns = [
+      { label: 'Discarded Item', key: 'product_name' },
+      { label: 'Qty', key: 'quantity' },
+      { label: 'Unit Retail', key: 'unit_price' },
+      { label: 'Cashier', key: 'profiles' },
+      { label: 'Reason', key: 'reason' }
+    ];
 
     renderDataTable({
       targetId: 'sales-table-content',
@@ -884,6 +1116,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
             <tbody>${itemsRows}</tbody>
           </table>
           <div style="display:flex; gap:8px;">
+            <button id="btn-single-pdf" class="btn btn-outline" style="flex:1;">Export PDF</button>
             <button id="btn-print-usb" class="btn btn-outline" style="flex:1;">WebUSB Print</button>
             <button id="btn-print-bt" class="btn btn-outline" style="flex:1;">Bluetooth Print</button>
             <button id="btn-print-fallback" class="btn btn-teal-primary" style="flex:1;">Slip Preview</button>
@@ -901,6 +1134,19 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       tax: Number(order.tax_amount || 0),
       total: Number(order.total || 0),
       currency,
+    };
+
+    document.getElementById('btn-single-pdf').onclick = () => {
+      const pdfCols = [
+        { label: 'Item Name', key: 'product_name' },
+        { label: 'Quantity', key: 'quantity' },
+        { label: 'Unit Price', key: 'unit_price' },
+        { label: 'Total', key: 'total' }
+      ];
+      Exporter.exportToPDF(`Receipt ${order.receipt_no}`, items || [], pdfCols, {
+        'Receipt No': order.receipt_no,
+        'Total Amount': `${Number(order.total).toLocaleString()} ${currency}`
+      });
     };
 
     document.getElementById('btn-print-usb').onclick = () => PrinterDriver.printViaUSB(slipPayload);
