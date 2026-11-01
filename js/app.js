@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // =========================================================================
-// Collapsible Sidebar Navigation & Desktop Hover Flyout Logic
+// Collapsible Sidebar Navigation Logic
 // =========================================================================
 function adjustMenuBoundary(menuElement, triggerElement = null) {
   if (!menuElement) return;
@@ -87,7 +87,6 @@ function bindSidebarFlyoutMenu() {
   const toggleSidebarBtn = document.getElementById('btn-toggle-sidebar');
   const sidebar = document.getElementById('main-sidebar');
   const mainContent = document.querySelector('.main-content');
-  const desktopHotzone = document.getElementById('desktop-edge-hover-zone');
 
   let hoverTimer = null;
 
@@ -155,7 +154,7 @@ function bindSidebarFlyoutMenu() {
     }
   }
 
-  // --- DESKTOP HOVER NAVIGATION INTERACTION ---
+  // --- BURGER MENU HOVER ONLY (DESKTOP) ---
   if (toggleSidebarBtn) {
     toggleSidebarBtn.addEventListener('mouseenter', () => {
       if (!isDesktop()) return;
@@ -164,15 +163,7 @@ function bindSidebarFlyoutMenu() {
     });
   }
 
-  if (desktopHotzone) {
-    desktopHotzone.addEventListener('mouseenter', () => {
-      if (!isDesktop()) return;
-      clearTimeout(hoverTimer);
-      openSidebar();
-    });
-  }
-
-  // Mouseleave debounce timer for smooth desktop navigation
+  // Smooth mouseleave debounce for sidebar & flyout panel
   [sidebar, flyoutPanel].forEach((element) => {
     if (!element) return;
 
@@ -185,7 +176,7 @@ function bindSidebarFlyoutMenu() {
       if (!isDesktop()) return;
       hoverTimer = setTimeout(() => {
         closeSidebar();
-      }, 250);
+      }, 300);
     });
   });
 
@@ -202,7 +193,7 @@ function bindSidebarFlyoutMenu() {
     });
   }
 
-  // Category trigger button clicks & hovers
+  // Category trigger button CLICK ONLY (Hover won't trigger flyouts)
   triggers.forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -213,13 +204,6 @@ function bindSidebarFlyoutMenu() {
       } else {
         openFlyout(categoryKey, btn);
       }
-    });
-
-    btn.addEventListener('mouseenter', () => {
-      if (!isDesktop()) return;
-      clearTimeout(hoverTimer);
-      const categoryKey = btn.dataset.menuTrigger;
-      openFlyout(categoryKey, btn);
     });
   });
 
