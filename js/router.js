@@ -28,11 +28,6 @@ const salesTabTitles = {
 };
 
 const routes = {
-  '#pos': {
-    title: 'Cashier Terminal',
-    loader: () => import('./views/pos.js'),
-    navKey: 'pos',
-  },
   '#dashboard': {
     title: 'Dashboard',
     loader: () => import('./views/dashboard.js'),
@@ -44,9 +39,34 @@ const routes = {
     navKey: 'sales',
   },
   '#products': {
-    title: 'Product Catalog',
+    title: 'Products List',
     loader: () => import('./views/products.js'),
     navKey: 'products',
+  },
+  '#categories': {
+    title: 'Categories Management',
+    loader: () => import('./views/categories.js'),
+    navKey: 'categories',
+  },
+  '#modifiers': {
+    title: 'Modifiers & Add-ons',
+    loader: () => import('./views/modifiers.js'),
+    navKey: 'modifiers',
+  },
+  '#measurements': {
+    title: 'Units of Measurement',
+    loader: () => import('./views/measurements.js'),
+    navKey: 'measurements',
+  },
+  '#barcode-generator': {
+    title: 'Barcode Generator',
+    loader: () => import('./components/BarcodeGenerator.js'),
+    navKey: 'barcode-generator',
+  },
+  '#deleted-items': {
+    title: 'Deleted Items Archive',
+    loader: () => import('./views/deletedItems.js'),
+    navKey: 'deleted-items',
   },
   '#inventory': {
     title: 'Inventory & Stock',

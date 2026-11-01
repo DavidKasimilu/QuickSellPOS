@@ -189,7 +189,7 @@
   <!-- ========================================================================= -->
   <div id="app-container" class="app-shell">
     
-    <!-- Left Navigation Rail Bar (Hidden by default in CSS, slides in on burger click) -->
+    <!-- Left Navigation Rail Bar -->
     <aside class="sidebar" id="main-sidebar">
       <div class="sidebar-top">
         <button class="nav-icon-btn profile-trigger" id="btn-open-profile" title="My Profile">
@@ -198,12 +198,7 @@
       </div>
 
       <nav class="sidebar-nav">
-        <!-- Direct POS Access -->
-        <a href="#pos" class="nav-icon-link" data-nav="pos" title="Cashier Register">
-          <i data-lucide="shopping-cart"></i>
-        </a>
-
-        <!-- Main Dashboard Direct Link -->
+        <!-- Main Dashboard Direct Link (Default) -->
         <a href="#dashboard" class="nav-icon-link active" data-nav="dashboard" title="Dashboard">
           <i data-lucide="layout-dashboard"></i>
         </a>
@@ -254,7 +249,7 @@
     <!-- Submenu Flyout Menu Panel -->
     <div id="subnav-flyout" class="subnav-flyout-panel hidden">
       
-      <!-- 1. RESTRICTED SALES MANAGEMENT GROUP (Only requested items) -->
+      <!-- 1. SALES MANAGEMENT GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="sales">
         <div class="subnav-header">Sales Management</div>
         <a href="#sales-summary?tab=sales-summary" class="subnav-item" data-nav="sales-summary">Sales Summary</a>
@@ -299,17 +294,26 @@
         </div>
       </div>
 
-      <!-- 2. Product Catalog Group -->
+      <!-- 2. PRODUCT CATALOG GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="products">
         <div class="subnav-header">Product Catalog</div>
-        <a href="#products" class="subnav-item" data-nav="products">Products List</a>
-        <a href="#products?tab=categories" class="subnav-item" data-nav="products">Categories & Brands</a>
-        <a href="#products?tab=modifiers" class="subnav-item" data-nav="products">Modifiers & Variants</a>
-        <a href="#products?tab=uom" class="subnav-item" data-nav="products">Units of Measurement (UOM)</a>
-        <a href="#products?tab=barcode" class="subnav-item" data-nav="products">Barcode Generator</a>
+        <a href="#products" class="subnav-item" data-nav="products">Products</a>
+        <a href="#categories" class="subnav-item" data-nav="categories">Categories</a>
+        <a href="#modifiers" class="subnav-item" data-nav="modifiers">Modifiers</a>
+        <a href="#measurements" class="subnav-item" data-nav="measurements">Measurements</a>
+        <a href="#barcode-generator" class="subnav-item" data-nav="barcode-generator">Barcode Generator</a>
+        
+        <!-- More Dropdown for Deleted Items -->
+        <div class="subnav-dropdown-toggle" data-dropdown-trigger="products-more">
+          <span>More</span>
+          <i data-lucide="chevron-down" class="dropdown-icon"></i>
+        </div>
+        <div class="subnav-dropdown-content hidden" data-dropdown-content="products-more">
+          <a href="#deleted-items" class="subnav-subitem" data-nav="deleted-items">Deleted Items</a>
+        </div>
       </div>
 
-      <!-- 3. Inventory Control & Supply Group -->
+      <!-- 3. INVENTORY CONTROL & SUPPLY GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="inventory">
         <div class="subnav-header">Inventory Control</div>
         <a href="#inventory" class="subnav-item" data-nav="inventory">Available Inventory</a>
@@ -322,7 +326,6 @@
         <a href="#inventory?tab=suppliers" class="subnav-item" data-nav="inventory">Suppliers & Vendors</a>
         <a href="#inventory?tab=credit" class="subnav-item" data-nav="inventory">Supplier Credit & Settlements</a>
 
-        <!-- Accordion Sub-Menu Dropdown -->
         <div class="subnav-dropdown-toggle" data-dropdown-trigger="inventory-reports">
           <span>Inventory Reports</span>
           <i data-lucide="chevron-down" class="dropdown-icon"></i>
@@ -336,7 +339,7 @@
         </div>
       </div>
 
-      <!-- 4. Customer Accounts Group -->
+      <!-- 4. CUSTOMER ACCOUNTS GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="customers">
         <div class="subnav-header">Customer Accounts</div>
         <a href="#customers" class="subnav-item" data-nav="customers">Customer Directory</a>
@@ -344,14 +347,14 @@
         <a href="#customers?tab=groups" class="subnav-item" data-nav="customers">Customer Groups & Loyalty</a>
       </div>
 
-      <!-- 5. Promotions & Discounts Group -->
+      <!-- 5. PROMOTIONS & DISCOUNTS GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="promotions">
         <div class="subnav-header">Promotions & Discounts</div>
         <a href="#promotions" class="subnav-item" data-nav="promotions">Active Campaigns</a>
         <a href="#promotions?tab=rules" class="subnav-item" data-nav="promotions">Discount Rules</a>
       </div>
 
-      <!-- 6. Staff & Security Group -->
+      <!-- 6. STAFF & SECURITY GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="employees">
         <div class="subnav-header">Staff & Security</div>
         <a href="#employees" class="subnav-item" data-nav="employees">Employee List</a>
@@ -359,7 +362,7 @@
         <a href="#employees?tab=shifts" class="subnav-item" data-nav="employees">Staff Performance & Shifts</a>
       </div>
 
-      <!-- 7. System & Store Setup Group -->
+      <!-- 7. SYSTEM & STORE SETUP GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="settings">
         <div class="subnav-header">System Setup</div>
         <a href="#settings" class="subnav-item" data-nav="settings">Store Profile & Business Info</a>

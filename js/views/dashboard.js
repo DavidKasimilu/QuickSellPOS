@@ -2,8 +2,7 @@ import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
 
 export async function mount(container) {
-  const currency = globalState.preferences.currency || 'KES';
-  const filterDate = globalState.filterDate || new Date().toISOString().split('T')[0];
+  const currency = globalState.preferences?.currency || 'KES';
   let unsubs = [];
 
   container.innerHTML = `
@@ -66,7 +65,7 @@ export async function mount(container) {
     <div class="dashboard-charts-grid">
       <div class="chart-box">
         <div class="chart-header">
-          <h3>Sales Summary (${filterDate})</h3>
+          <h3 id="chart-title-period">Sales Summary</h3>
           <span class="chart-legend"><i class="legend-indicator teal-bg"></i> Volume Trend</span>
         </div>
         <div class="chart-canvas-container" id="sales-chart-body">
@@ -92,25 +91,51 @@ export async function mount(container) {
     </div>
   `;
 
-  // Reactive listener: recalculates metrics immediately when mobile POS orders sync
+  // Determine target date range based on active date controls or global state
+  function getDateBounds() {
+    const period = globalState.datePeriod || 'today';
+    const now = new Date();
+    let startDate = new Date();
+    let endDate = new Date();
+
+    if (period === 'yesterday') {
+      startDate.setDate(now.getDate() - 1);
+      endDate.setDate(now.getDate() - 1);
+    } else if (period === '7days') {
+      startDate.setDate(now.getDate() - 6);
+    } else if (period === 'custom' && globalState.filterDate) {
+      startDate = new Date(globalState.filterDate);
+      endDate = new Date(globalState.filterDate);
+    }
+
+    const startISO = `${startDate.toISOString().split('T')[0]}T00:00:00.000Z`;
+    const endISO = `${endDate.toISOString().split('T')[0]}T23:59:59.999Z`;
+    const label = period === '7days' ? 'Last 7 Days' : startDate.toISOString().split('T')[0];
+
+    return { startISO, endISO, label };
+  }
+
+  // Reactive listener: recalculates metrics immediately when orders update or date period changes
   unsubs.push(
-    globalState.subscribeKey('orders', () => {
-      loadMetrics();
-    })
+    globalState.subscribeKey('orders', () => loadMetrics()),
+    globalState.subscribeKey('datePeriod', () => loadMetrics()),
+    globalState.subscribeKey('filterDate', () => loadMetrics())
   );
 
   async function loadMetrics() {
-    const startOfDay = `${filterDate}T00:00:00.000Z`;
-    const endOfDay = `${filterDate}T23:59:59.999Z`;
+    const { startISO, endISO, label } = getDateBounds();
+
+    const chartTitle = document.getElementById('chart-title-period');
+    if (chartTitle) chartTitle.textContent = `Sales Summary (${label})`;
 
     let query = supabase
       .from('orders')
       .select(`
-        id, subtotal, discount_amount, tax_amount, total, order_status,
+        id, subtotal, discount_amount, tax_amount, total, order_status, created_at,
         order_items ( cost_price, quantity )
       `)
-      .gte('created_at', startOfDay)
-      .lte('created_at', endOfDay);
+      .gte('created_at', startISO)
+      .lte('created_at', endISO);
 
     if (globalState.activeShopId) {
       query = query.eq('shop_id', globalState.activeShopId);
@@ -144,7 +169,6 @@ export async function mount(container) {
     });
 
     const profit = net - cogs;
-
     const fmt = (num) => `${Number(num).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;
 
     const grossEl = document.getElementById('val-gross-sales');
@@ -161,22 +185,22 @@ export async function mount(container) {
     if (discEl) discEl.textContent = fmt(discounts);
     if (refEl) refEl.textContent = fmt(refunds);
 
-    renderTrendVisualization(orders || []);
+    renderTrendVisualization(orders || [], label);
   }
 
-  function renderTrendVisualization(orders) {
+  function renderTrendVisualization(orders, label) {
     const container = document.getElementById('sales-chart-body');
     if (!container) return;
 
     if (!orders.length) {
-      container.innerHTML = `<div class="chart-placeholder"><p>No orders recorded for ${filterDate}</p></div>`;
+      container.innerHTML = `<div class="chart-placeholder"><p>No orders recorded for ${label}</p></div>`;
       return;
     }
 
     container.innerHTML = `
       <div style="width:100%; display:flex; flex-direction:column; justify-content:center; gap:8px;">
         <div style="display:flex; justify-content:space-between; font-size:0.875rem;">
-          <span>Transactions Processed</span>
+          <span>Transactions Processed (${label})</span>
           <strong>${orders.length}</strong>
         </div>
         <div style="height:8px; width:100%; background:var(--teal-50); border-radius:4px; overflow:hidden;">
@@ -186,13 +210,36 @@ export async function mount(container) {
     `;
   }
 
+  // Setup top header date controls interaction
+  const dateChips = document.querySelectorAll('.date-chip');
+  dateChips.forEach((chip) => {
+    chip.addEventListener('click', (e) => {
+      dateChips.forEach((c) => c.classList.remove('active'));
+      e.target.classList.add('active');
+      const period = e.target.dataset.period;
+      globalState.datePeriod = period;
+      loadMetrics();
+    });
+  });
+
+  const dateInput = document.getElementById('stats-calendar-filter');
+  if (dateInput) {
+    dateInput.addEventListener('change', (e) => {
+      if (e.target.value) {
+        dateChips.forEach((c) => c.classList.remove('active'));
+        globalState.datePeriod = 'custom';
+        globalState.filterDate = e.target.value;
+        loadMetrics();
+      }
+    });
+  }
+
   await loadMetrics();
 
   if (window.lucide) {
     window.lucide.createIcons({ root: container });
   }
 
-  // Clean unmount hook
   return () => {
     unsubs.forEach((unsub) => unsub && unsub());
   };
