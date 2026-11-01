@@ -36,8 +36,8 @@ export const Exporter = {
         if (val === null || val === undefined) {
           val = '';
         } else if (typeof val === 'object') {
-          // Handle nested objects or relational data (e.g. customer name)
-          val = val.name || val.full_name || JSON.stringify(val);
+          // Robust nested object resolution for foreign key joins
+          val = val.full_name || val.name || val.email || val.receipt_no || JSON.stringify(val);
         }
         const stringVal = String(val).replace(/"/g, '""');
         return `"${stringVal}"`;
@@ -92,11 +92,11 @@ export const Exporter = {
         let val = row[col.key];
         if (col.render && typeof col.render === 'function') {
           const rawRender = col.render(val, row);
-          val = rawRender.replace(/<[^>]*>?/gm, ''); 
+          val = typeof rawRender === 'string' ? rawRender.replace(/<[^>]*>?/gm, '') : rawRender; 
         } else if (val === null || val === undefined) {
           val = '-';
         } else if (typeof val === 'object') {
-          val = val.name || val.full_name || '-';
+          val = val.full_name || val.name || val.receipt_no || '-';
         }
         return `<td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-size:12px; color:#334155;">${val}</td>`;
       }).join('');

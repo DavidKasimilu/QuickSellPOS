@@ -29,6 +29,26 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ==========================================================================
+   Invisible Desktop Edge Trigger Zone
+   ========================================================================== */
+.desktop-edge-hotzone {
+  display: none;
+}
+
+@media (min-width: 1024px) and (pointer: fine) {
+  .desktop-edge-hotzone {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 10px;
+    height: 100vh;
+    z-index: calc(var(--z-sidebar) - 1);
+    background: transparent;
+  }
+}
+
 /* App Viewport Container */
 .app-shell {
   display: flex;
@@ -346,6 +366,7 @@ svg.lucide, i[data-lucide] {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .date-picker-wrap {

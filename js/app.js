@@ -8,6 +8,9 @@ import { supabase } from './supabaseClient.js';
 let pendingAuthEmail = '';
 let realtimeChannel = null;
 
+// Helper to check if device is a desktop with a precise cursor
+const isDesktop = () => window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches;
+
 document.addEventListener('DOMContentLoaded', async () => {
   // 1. Initial Icon Rendering
   if (window.lucide) {
@@ -54,19 +57,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // =========================================================================
-// Collapsible Sidebar Navigation & Flyout Menu Logic
+// Collapsible Sidebar Navigation & Desktop Hover Flyout Logic
 // =========================================================================
 function adjustMenuBoundary(menuElement, triggerElement = null) {
   if (!menuElement) return;
 
   const viewportHeight = window.innerHeight;
-  const bottomPadding = 24; // Safe margin from bottom edge / browser bar
+  const bottomPadding = 24;
 
   if (triggerElement) {
     const rect = triggerElement.getBoundingClientRect();
     const availableSpace = viewportHeight - rect.top - bottomPadding;
-    
-    // Cap visible height to ~5 items max (approx 210px) or available space
     const maxAllowed = Math.min(210, Math.max(120, availableSpace));
     menuElement.style.maxHeight = `${maxAllowed}px`;
   } else {
@@ -86,15 +87,31 @@ function bindSidebarFlyoutMenu() {
   const toggleSidebarBtn = document.getElementById('btn-toggle-sidebar');
   const sidebar = document.getElementById('main-sidebar');
   const mainContent = document.querySelector('.main-content');
+  const desktopHotzone = document.getElementById('desktop-edge-hover-zone');
+
+  let hoverTimer = null;
 
   // Set initial collapsed state so content is unimpeded
   if (sidebar) sidebar.classList.add('collapsed');
   if (mainContent) mainContent.classList.add('expanded');
 
+  function openSidebar() {
+    if (!sidebar) return;
+    sidebar.classList.remove('collapsed');
+    if (mainContent) mainContent.classList.remove('expanded');
+  }
+
   function closeFlyout() {
     if (flyoutPanel) flyoutPanel.classList.add('hidden');
     if (backdrop) backdrop.classList.add('hidden');
     triggers.forEach((btn) => btn.classList.remove('active'));
+  }
+
+  function closeSidebar() {
+    if (!sidebar) return;
+    sidebar.classList.add('collapsed');
+    if (mainContent) mainContent.classList.add('expanded');
+    closeFlyout();
   }
 
   function openFlyout(categoryKey, targetBtn) {
@@ -114,7 +131,6 @@ function bindSidebarFlyoutMenu() {
       if (targetBtn) {
         targetBtn.classList.add('active');
 
-        // Dynamically calculate the top position relative to browser bottom
         const rect = targetBtn.getBoundingClientRect();
         const iconTop = rect.top;
         const windowHeight = window.innerHeight;
@@ -139,23 +155,54 @@ function bindSidebarFlyoutMenu() {
     }
   }
 
-  // Burger button toggles side nav visibility
+  // --- DESKTOP HOVER NAVIGATION INTERACTION ---
+  if (toggleSidebarBtn) {
+    toggleSidebarBtn.addEventListener('mouseenter', () => {
+      if (!isDesktop()) return;
+      clearTimeout(hoverTimer);
+      openSidebar();
+    });
+  }
+
+  if (desktopHotzone) {
+    desktopHotzone.addEventListener('mouseenter', () => {
+      if (!isDesktop()) return;
+      clearTimeout(hoverTimer);
+      openSidebar();
+    });
+  }
+
+  // Mouseleave debounce timer for smooth desktop navigation
+  [sidebar, flyoutPanel].forEach((element) => {
+    if (!element) return;
+
+    element.addEventListener('mouseenter', () => {
+      if (!isDesktop()) return;
+      clearTimeout(hoverTimer);
+    });
+
+    element.addEventListener('mouseleave', () => {
+      if (!isDesktop()) return;
+      hoverTimer = setTimeout(() => {
+        closeSidebar();
+      }, 250);
+    });
+  });
+
+  // Burger button click toggle
   if (toggleSidebarBtn && sidebar) {
     toggleSidebarBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const isCollapsed = sidebar.classList.contains('collapsed');
       if (isCollapsed) {
-        sidebar.classList.remove('collapsed');
-        if (mainContent) mainContent.classList.remove('expanded');
+        openSidebar();
       } else {
-        sidebar.classList.add('collapsed');
-        if (mainContent) mainContent.classList.add('expanded');
-        closeFlyout();
+        closeSidebar();
       }
     });
   }
 
-  // Trigger buttons click handlers
+  // Category trigger button clicks & hovers
   triggers.forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -167,9 +214,16 @@ function bindSidebarFlyoutMenu() {
         openFlyout(categoryKey, btn);
       }
     });
+
+    btn.addEventListener('mouseenter', () => {
+      if (!isDesktop()) return;
+      clearTimeout(hoverTimer);
+      const categoryKey = btn.dataset.menuTrigger;
+      openFlyout(categoryKey, btn);
+    });
   });
 
-  // Accordion drop-down toggles inside flyouts (e.g. Advanced Sales & Suspicious Reports)
+  // Accordion drop-down toggles inside flyouts
   const dropdownTriggers = document.querySelectorAll('[data-dropdown-trigger]');
   dropdownTriggers.forEach((trigger) => {
     trigger.addEventListener('click', (e) => {
@@ -191,27 +245,23 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // Handle clicks on subnav items & sub-items -> Navigate & hide menu
+  // Handle clicks on subnav items
   const subnavItems = document.querySelectorAll('.subnav-item, .subnav-subitem');
   subnavItems.forEach((item) => {
     item.addEventListener('click', () => {
-      closeFlyout();
-      if (sidebar) sidebar.classList.add('collapsed');
-      if (mainContent) mainContent.classList.add('expanded');
+      closeSidebar();
     });
   });
 
-  // Direct icon clicks auto-collapse sidebar
+  // Direct icon clicks collapse sidebar
   const directNavLinks = document.querySelectorAll('.sidebar-nav a.nav-icon-link');
   directNavLinks.forEach((link) => {
     link.addEventListener('click', () => {
-      closeFlyout();
-      if (sidebar) sidebar.classList.add('collapsed');
-      if (mainContent) mainContent.classList.add('expanded');
+      closeSidebar();
     });
   });
 
-  // Close flyout on backdrop or outside click
+  // Backdrop or outside click
   if (backdrop) {
     backdrop.addEventListener('click', closeFlyout);
   }
@@ -233,7 +283,6 @@ function setupGlobalRealtime(shopId) {
 
   realtimeChannel = supabase
     .channel(`backoffice_shop_${shopId}`)
-    // Products
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'products', filter: `shop_id=eq.${shopId}` },
@@ -245,7 +294,6 @@ function setupGlobalRealtime(shopId) {
         }
       }
     )
-    // Categories
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'categories', filter: `shop_id=eq.${shopId}` },
@@ -257,7 +305,6 @@ function setupGlobalRealtime(shopId) {
         }
       }
     )
-    // Inventory adjustments & Mobile POS sales decrements
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'inventory', filter: `shop_id=eq.${shopId}` },
@@ -265,7 +312,6 @@ function setupGlobalRealtime(shopId) {
         globalState.upsertEntity('inventory', payload.new);
       }
     )
-    // Incoming Orders from Mobile POS
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'orders', filter: `shop_id=eq.${shopId}` },
@@ -274,7 +320,6 @@ function setupGlobalRealtime(shopId) {
         Toast.info(`Incoming sale recorded: #${payload.new.receipt_no}`);
       }
     )
-    // Order updates / voids
     .on(
       'postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'orders', filter: `shop_id=eq.${shopId}` },
@@ -282,7 +327,6 @@ function setupGlobalRealtime(shopId) {
         globalState.upsertEntity('orders', payload.new);
       }
     )
-    // Customers created or updated via counter
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'customers', filter: `shop_id=eq.${shopId}` },
@@ -380,7 +424,6 @@ function bindAuthFormTransitions() {
 // Authentication Execution
 // =========================================================================
 function bindAuthActions() {
-  // 1. Sign In
   const formLogin = document.getElementById('form-login');
   formLogin.onsubmit = async (e) => {
     e.preventDefault();
@@ -411,7 +454,6 @@ function bindAuthActions() {
     }
   };
 
-  // 2. Sign Up
   const formRegister = document.getElementById('form-register');
   formRegister.onsubmit = async (e) => {
     e.preventDefault();
@@ -441,7 +483,6 @@ function bindAuthActions() {
     }
   };
 
-  // 3. Confirm Registration OTP
   const formOtp = document.getElementById('form-otp');
   formOtp.onsubmit = async (e) => {
     e.preventDefault();
@@ -471,7 +512,6 @@ function bindAuthActions() {
     }
   };
 
-  // 4. Request Password Reset OTP
   const formForgot = document.getElementById('form-forgot');
   formForgot.onsubmit = async (e) => {
     e.preventDefault();
@@ -493,7 +533,6 @@ function bindAuthActions() {
     }
   };
 
-  // 5. Submit Recovery OTP and Set New Password
   const formResetPass = document.getElementById('form-reset-password');
   formResetPass.onsubmit = async (e) => {
     e.preventDefault();
@@ -518,7 +557,7 @@ function bindAuthActions() {
 }
 
 // =========================================================================
-// Profile Slide-over Drawer & Preferences
+// Profile Drawer & Date Filtering
 // =========================================================================
 function bindProfileDrawer() {
   const drawer = document.getElementById('drawer-profile');
@@ -579,9 +618,6 @@ function bindProfileDrawer() {
   };
 }
 
-// =========================================================================
-// Date Filtering & Top Bar Synchronization
-// =========================================================================
 function bindDateFilters() {
   const chips = document.querySelectorAll('.date-chip[data-period]');
   const calInput = document.getElementById('stats-calendar-filter');
@@ -597,13 +633,24 @@ function bindDateFilters() {
       const now = new Date();
 
       if (period === 'today') {
+        globalState.datePeriod = 'today';
         globalState.setFilterDate(now.toISOString().split('T')[0]);
       } else if (period === 'yesterday') {
+        globalState.datePeriod = 'yesterday';
         now.setDate(now.getDate() - 1);
         globalState.setFilterDate(now.toISOString().split('T')[0]);
       } else if (period === '7days') {
-        now.setDate(now.getDate() - 7);
+        globalState.datePeriod = '7days';
+        now.setDate(now.getDate() - 6);
         globalState.setFilterDate(now.toISOString().split('T')[0]);
+      } else if (period === 'month') {
+        globalState.datePeriod = 'month';
+        const startM = new Date(now.getFullYear(), now.getMonth(), 1);
+        globalState.setFilterDate(startM.toISOString().split('T')[0]);
+      } else if (period === 'last-month') {
+        globalState.datePeriod = 'last-month';
+        const startPrevM = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        globalState.setFilterDate(startPrevM.toISOString().split('T')[0]);
       }
 
       if (calInput) calInput.value = globalState.filterDate;
@@ -614,6 +661,7 @@ function bindDateFilters() {
   if (calInput) {
     calInput.onchange = (e) => {
       chips.forEach((c) => c.classList.remove('active'));
+      globalState.datePeriod = 'custom';
       globalState.setFilterDate(e.target.value);
       navigate();
     };

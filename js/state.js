@@ -18,8 +18,10 @@ export const globalState = {
     language: 'en',
   },
 
-  // Active Date Filter for Analytics
+  // Active Date Filter for Analytics & Date Ranges
   filterDate: new Date().toISOString().split('T')[0],
+  filterDateEnd: new Date().toISOString().split('T')[0],
+  datePeriod: 'today', // 'today' | 'yesterday' | '7days' | 'month' | 'last-month' | 'custom'
 
   // Real-time synced entity collections
   products: [],
@@ -126,6 +128,14 @@ export const globalState = {
 
   setFilterDate(dateStr) {
     this.filterDate = dateStr;
+    this.filterDateEnd = dateStr;
+    this.notify();
+  },
+
+  setDateRange(startStr, endStr = startStr, periodKey = 'custom') {
+    this.filterDate = startStr;
+    this.filterDateEnd = endStr;
+    this.datePeriod = periodKey;
     this.notify();
   },
 
@@ -164,4 +174,4 @@ export const globalState = {
 };
 
 // Initialize cached preferences on module load
-globalState.loadStoredPreferences();
+globalState.loadStoredPreferences();``

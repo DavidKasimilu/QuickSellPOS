@@ -8,10 +8,10 @@ import { Exporter } from '../components/Exporter.js';
 import { PieChart } from '../components/PieChart.js';
 
 export async function mount(container, activeTab = 'sales-summary', queryParams = new URLSearchParams()) {
-  const currency = globalState.preferences.currency || 'KES';
+  const currency = globalState.preferences?.currency || 'KES';
   let unsubs = [];
 
-  // Filter State (Default: Current Month)
+  // Calculate Accurate Initial Date Bounds (Default: This Month)
   const now = new Date();
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
   const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
@@ -47,7 +47,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     console.warn('Failed to load filter options:', e);
   }
 
-  // Render Page Layout with Filter Bar & Universal Export Bar
+  // Render Page Layout
   container.innerHTML = `
     <!-- Top Filter Controls Bar -->
     <div class="card" style="padding: 16px; margin-bottom: 20px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px;">
@@ -126,26 +126,52 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       </div>
     </div>
 
-    <!-- Interactive Visual Analytics (Pie / Donut Chart Container) -->
+    <!-- Interactive Visual Analytics -->
     <div id="sales-chart-container"></div>
 
-    <!-- Main Table / Chart Data Target Area -->
+    <!-- Main Table Data Area -->
     <div class="chart-box" style="padding: 0;">
       <div id="sales-table-content"></div>
     </div>
   `;
 
+  // Helper function to flatten nested export data safely
+  function prepareExportData(data, columns) {
+    return data.map((row) => {
+      const formattedRow = {};
+      columns.forEach((col) => {
+        let val = row[col.key];
+        if (typeof val === 'object' && val !== null) {
+          val = val.full_name || val.name || val.receipt_no || JSON.stringify(val);
+        }
+        formattedRow[col.label] = val ?? '-';
+      });
+      return formattedRow;
+    });
+  }
+
   // Bind Export Buttons
   container.querySelector('#btn-export-csv').onclick = () => {
-    Exporter.exportToCSV(`${activeTab}_report.csv`, currentReportData, currentReportColumns);
+    if (!currentReportData.length) {
+      Toast.error('No data available to export.');
+      return;
+    }
+    const exportFormatted = prepareExportData(currentReportData, currentReportColumns);
+    Exporter.exportToCSV(`${activeTab}_report.csv`, exportFormatted);
     Toast.success('CSV Report exported successfully.');
   };
 
   container.querySelector('#btn-export-pdf').onclick = () => {
-    Exporter.exportToPDF(currentReportTitle, currentReportData, currentReportColumns, currentSummaryMeta);
+    if (!currentReportData.length) {
+      Toast.error('No data available to export.');
+      return;
+    }
+    const exportFormatted = prepareExportData(currentReportData, currentReportColumns);
+    const pdfCols = currentReportColumns.map(c => ({ label: c.label, key: c.label }));
+    Exporter.exportToPDF(currentReportTitle, exportFormatted, pdfCols, currentSummaryMeta);
   };
 
-  // Bind Filter Events
+  // Bind Preset Filter Chips
   const presetChips = container.querySelectorAll('[data-preset]');
   const startInput = container.querySelector('#filter-date-start');
   const endInput = container.querySelector('#filter-date-end');
@@ -168,17 +194,15 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         dateStart = dateEnd = yest.toISOString().split('T')[0];
       } else if (preset === '7days') {
         const prev7 = new Date(today);
-        prev7.setDate(prev7.getDate() - 7);
+        prev7.setDate(prev7.getDate() - 6);
         dateStart = prev7.toISOString().split('T')[0];
         dateEnd = today.toISOString().split('T')[0];
       } else if (preset === 'month') {
-        dateStart = firstDayOfMonth;
-        dateEnd = lastDayOfMonth;
+        dateStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+        dateEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
       } else if (preset === 'last-month') {
-        const prevMStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-        const prevMEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-        dateStart = prevMStart.toISOString().split('T')[0];
-        dateEnd = prevMEnd.toISOString().split('T')[0];
+        dateStart = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+        dateEnd = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
       }
 
       startInput.value = dateStart;
@@ -349,7 +373,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   // =========================================================================
-  // VIEW RENDERERS & PIE CHART INTEGRATION
+  // VIEW RENDERERS WITH EXPLICIT FOREIGN KEY RELATIONS
   // =========================================================================
 
   async function renderSalesSummary(target, chartTarget) {
@@ -410,7 +434,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   async function renderReceipts(target, chartTarget) {
-    let query = supabase.from('orders').select('*, customers(name), profiles(full_name)').eq('is_deleted', false).order('created_at', { ascending: false });
+    // FIXED: Explicit foreign key relationship 'cashier:profiles!orders_cashier_id_fkey'
+    let query = supabase.from('orders').select('*, customers(name), cashier:profiles!orders_cashier_id_fkey(full_name, email)').eq('is_deleted', false).order('created_at', { ascending: false });
     query = applyBaseOrderFilters(query);
 
     const { data: orders, error } = await query;
@@ -424,7 +449,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       { label: 'Receipt #', key: 'receipt_no' },
       { label: 'Date', key: 'created_at' },
       { label: 'Customer', key: 'customers' },
-      { label: 'Cashier', key: 'profiles' },
+      { label: 'Cashier', key: 'cashier' },
       { label: 'Total Billed', key: 'total' },
       { label: 'Status', key: 'order_status' }
     ];
@@ -435,7 +460,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Receipt #', key: 'receipt_no', render: (v) => `<strong>${v}</strong>` },
         { label: 'Date', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
         { label: 'Customer', key: 'customers', render: (c) => c?.name || 'Walk-in' },
-        { label: 'Cashier', key: 'profiles', render: (p) => p?.full_name || 'Staff' },
+        { label: 'Cashier', key: 'cashier', render: (p) => p?.full_name || 'Staff' },
         { label: 'Total', key: 'total', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
         { label: 'Status', key: 'order_status', render: (s) => `<span class="badge ${s === 'completed' ? 'badge-teal' : ''}">${s.toUpperCase()}</span>` },
       ],
@@ -448,7 +473,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   async function renderRefunds(target, chartTarget) {
-    let query = supabase.from('orders').select('*, customers(name), profiles(full_name)').eq('order_status', 'refunded').order('created_at', { ascending: false });
+    // FIXED: Explicit foreign key relationship 'cashier:profiles!orders_cashier_id_fkey'
+    let query = supabase.from('orders').select('*, customers(name), cashier:profiles!orders_cashier_id_fkey(full_name, email)').eq('order_status', 'refunded').order('created_at', { ascending: false });
     query = applyBaseOrderFilters(query);
 
     const { data: refunds, error } = await query;
@@ -462,7 +488,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       { label: 'Receipt #', key: 'receipt_no' },
       { label: 'Date', key: 'created_at' },
       { label: 'Customer', key: 'customers' },
-      { label: 'Staff', key: 'profiles' },
+      { label: 'Staff', key: 'cashier' },
       { label: 'Refund Total', key: 'total' }
     ];
 
@@ -472,7 +498,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Refund Receipt', key: 'receipt_no', render: (v) => `<strong>${v}</strong>` },
         { label: 'Timestamp', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
         { label: 'Customer', key: 'customers', render: (c) => c?.name || 'Walk-in' },
-        { label: 'Issued By', key: 'profiles', render: (p) => p?.full_name || 'Staff' },
+        { label: 'Issued By', key: 'cashier', render: (p) => p?.full_name || 'Staff' },
         { label: 'Refund Amount', key: 'total', render: (v) => `<span style="color:var(--color-danger); font-weight:600;">-${Number(v).toLocaleString()} ${currency}</span>` },
       ],
       data: refunds || [],
@@ -685,7 +711,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       targetId: 'sales-table-content',
       columns: [
         { label: 'Charge Name', key: 'name', render: (v) => `<strong>${v}</strong>` },
-        { label: 'Type', key: 'rate_type', render: (v) => v.toUpperCase() },
+        { label: 'Type', key: 'rate_type', render: (v) => (v || '').toUpperCase() },
         { label: 'Value / Rate', key: 'amount', render: (v, r) => r.rate_type === 'percentage' ? `${v}%` : `${Number(v).toLocaleString()} ${currency}` },
         { label: 'Active', key: 'is_active', render: (v) => v ? '<span class="badge badge-teal">ACTIVE</span>' : '<span class="badge">DISABLED</span>' },
       ],
@@ -694,7 +720,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   async function renderShiftsReport(target, chartTarget) {
-    let query = supabase.from('shifts').select('*, profiles(full_name)').order('opened_at', { ascending: false });
+    // FIXED: Shift staff foreign key
+    let query = supabase.from('shifts').select('*, staff:profiles!shifts_staff_id_fkey(full_name, email)').order('opened_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data: shifts, error } = await query;
@@ -705,7 +732,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
     currentReportData = shifts || [];
     currentReportColumns = [
-      { label: 'Cashier', key: 'profiles' },
+      { label: 'Cashier', key: 'staff' },
       { label: 'Opened At', key: 'opened_at' },
       { label: 'Closed At', key: 'closed_at' },
       { label: 'Opening Float', key: 'opening_cash' },
@@ -715,7 +742,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     renderDataTable({
       targetId: 'sales-table-content',
       columns: [
-        { label: 'Staff Member', key: 'profiles', render: (p) => `<strong>${p?.full_name || 'Staff'}</strong>` },
+        { label: 'Staff Member', key: 'staff', render: (p) => `<strong>${p?.full_name || 'Staff'}</strong>` },
         { label: 'Opened At', key: 'opened_at', render: (d) => new Date(d).toLocaleString() },
         { label: 'Closed At', key: 'closed_at', render: (d) => d ? new Date(d).toLocaleString() : '<span class="badge badge-teal">OPEN</span>' },
         { label: 'Float', key: 'opening_cash', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
@@ -725,7 +752,6 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  // ADVANCED SALES REPORTS
   async function renderProductWiseReceipts(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, quantity, unit_price, total, orders!inner(receipt_no, created_at)').order('id', { ascending: false });
     if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
@@ -788,7 +814,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   async function renderDeletedReceipts(target, chartTarget) {
-    let query = supabase.from('orders').select('*, profiles(full_name)').eq('is_deleted', true).order('deleted_at', { ascending: false });
+    // FIXED: Deleted by profiles relation
+    let query = supabase.from('orders').select('*, deleted_by_user:profiles!orders_deleted_by_fkey(full_name, email)').eq('is_deleted', true).order('deleted_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data, error } = await query;
@@ -811,7 +838,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Voided Receipt #', key: 'receipt_no', render: (v) => `<strong>${v}</strong>` },
         { label: 'Amount Voided', key: 'total', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
         { label: 'Reason', key: 'deleted_reason' },
-        { label: 'Deleted At', key: 'deleted_at', render: (d) => new Date(d).toLocaleString() },
+        { label: 'Deleted At', key: 'deleted_at', render: (d) => d ? new Date(d).toLocaleString() : '-' },
       ],
       data: data || [],
       onAction: (a, id) => {
@@ -996,7 +1023,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   // SUSPICIOUS AUDIT REPORTS
   async function renderProductWiseDeletedReceipts(target, chartTarget) {
-    let query = supabase.from('deleted_order_items').select('*, profiles(full_name)').order('created_at', { ascending: false });
+    // FIXED: Explicit profile foreign key
+    let query = supabase.from('deleted_order_items').select('*, removed_by_user:profiles!deleted_order_items_removed_by_fkey(full_name, email)').order('created_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data, error } = await query;
@@ -1009,7 +1037,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     currentReportColumns = [
       { label: 'Product Name', key: 'product_name' },
       { label: 'Qty', key: 'quantity' },
-      { label: 'Staff', key: 'profiles' },
+      { label: 'Staff', key: 'removed_by_user' },
       { label: 'Reason', key: 'reason' }
     ];
 
@@ -1018,7 +1046,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       columns: [
         { label: 'Deleted Item', key: 'product_name', render: (p) => `<strong style="color:var(--color-danger);">${p}</strong>` },
         { label: 'Qty', key: 'quantity' },
-        { label: 'Removed By', key: 'profiles', render: (p) => p?.full_name || 'Staff' },
+        { label: 'Removed By', key: 'removed_by_user', render: (p) => p?.full_name || 'Staff' },
         { label: 'Reason', key: 'reason' },
         { label: 'Timestamp', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
       ],
@@ -1056,7 +1084,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   async function renderDeletedProductsInOpenOrders(target, chartTarget) {
-    let query = supabase.from('cart_discard_logs').select('*, profiles(full_name)').order('created_at', { ascending: false });
+    // FIXED: Cashier profile relation
+    let query = supabase.from('cart_discard_logs').select('*, cashier:profiles!cart_discard_logs_cashier_id_fkey(full_name, email)').order('created_at', { ascending: false });
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data, error } = await query;
@@ -1070,7 +1099,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       { label: 'Discarded Item', key: 'product_name' },
       { label: 'Qty', key: 'quantity' },
       { label: 'Unit Retail', key: 'unit_price' },
-      { label: 'Cashier', key: 'profiles' },
+      { label: 'Cashier', key: 'cashier' },
       { label: 'Reason', key: 'reason' }
     ];
 
@@ -1080,7 +1109,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Discarded Item', key: 'product_name', render: (p) => `<strong style="color:var(--color-danger);">${p}</strong>` },
         { label: 'Qty Dropped', key: 'quantity' },
         { label: 'Unit Retail', key: 'unit_price', render: (u) => `${Number(u).toLocaleString()} ${currency}` },
-        { label: 'Cashier', key: 'profiles', render: (c) => c?.full_name || 'Staff' },
+        { label: 'Cashier', key: 'cashier', render: (c) => c?.full_name || 'Staff' },
         { label: 'Reason', key: 'reason' },
         { label: 'Timestamp', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
       ],
@@ -1180,7 +1209,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  // Initial Load
+  // Initial View Load
   await loadView();
 
   return () => {
