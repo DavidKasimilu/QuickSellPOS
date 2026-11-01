@@ -11,7 +11,6 @@ export async function mount(container) {
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <h3 style="margin:0; font-size:1.25rem; font-weight:600;">Products Directory</h3>
         <span class="badge badge-teal" id="product-count-badge">0 items</span>
       </div>
       <div style="display:flex; gap:8px;">
