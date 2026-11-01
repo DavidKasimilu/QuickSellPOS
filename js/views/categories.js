@@ -10,7 +10,6 @@ export async function mount(container) {
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
       <div style="display:flex; align-items:center; gap:12px;">
-        <h3 style="margin:0; font-size:1.25rem; font-weight:600;">Product Categories</h3>
         <span class="badge badge-teal" id="category-count-badge">0 categories</span>
       </div>
       <div style="display:flex; gap:8px;">
