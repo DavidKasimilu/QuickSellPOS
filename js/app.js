@@ -8,9 +8,6 @@ import { supabase } from './supabaseClient.js';
 let pendingAuthEmail = '';
 let realtimeChannel = null;
 
-// Helper to check if device is a desktop with a precise cursor
-const isDesktop = () => window.matchMedia('(min-width: 1024px) and (pointer: fine)').matches;
-
 document.addEventListener('DOMContentLoaded', async () => {
   // 1. Initial Icon Rendering
   if (window.lucide) {
@@ -57,7 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 // =========================================================================
-// Collapsible Sidebar Navigation Logic
+// Pure Click-Based Collapsible Sidebar & Flyout Navigation
 // =========================================================================
 function adjustMenuBoundary(menuElement, triggerElement = null) {
   if (!menuElement) return;
@@ -88,29 +85,14 @@ function bindSidebarFlyoutMenu() {
   const sidebar = document.getElementById('main-sidebar');
   const mainContent = document.querySelector('.main-content');
 
-  let hoverTimer = null;
-
   // Set initial collapsed state so content is unimpeded
   if (sidebar) sidebar.classList.add('collapsed');
   if (mainContent) mainContent.classList.add('expanded');
-
-  function openSidebar() {
-    if (!sidebar) return;
-    sidebar.classList.remove('collapsed');
-    if (mainContent) mainContent.classList.remove('expanded');
-  }
 
   function closeFlyout() {
     if (flyoutPanel) flyoutPanel.classList.add('hidden');
     if (backdrop) backdrop.classList.add('hidden');
     triggers.forEach((btn) => btn.classList.remove('active'));
-  }
-
-  function closeSidebar() {
-    if (!sidebar) return;
-    sidebar.classList.add('collapsed');
-    if (mainContent) mainContent.classList.add('expanded');
-    closeFlyout();
   }
 
   function openFlyout(categoryKey, targetBtn) {
@@ -154,46 +136,23 @@ function bindSidebarFlyoutMenu() {
     }
   }
 
-  // --- BURGER MENU HOVER ONLY (DESKTOP) ---
-  if (toggleSidebarBtn) {
-    toggleSidebarBtn.addEventListener('mouseenter', () => {
-      if (!isDesktop()) return;
-      clearTimeout(hoverTimer);
-      openSidebar();
-    });
-  }
-
-  // Smooth mouseleave debounce for sidebar & flyout panel
-  [sidebar, flyoutPanel].forEach((element) => {
-    if (!element) return;
-
-    element.addEventListener('mouseenter', () => {
-      if (!isDesktop()) return;
-      clearTimeout(hoverTimer);
-    });
-
-    element.addEventListener('mouseleave', () => {
-      if (!isDesktop()) return;
-      hoverTimer = setTimeout(() => {
-        closeSidebar();
-      }, 300);
-    });
-  });
-
-  // Burger button click toggle
+  // 1. Burger button click toggles side rail visibility
   if (toggleSidebarBtn && sidebar) {
     toggleSidebarBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const isCollapsed = sidebar.classList.contains('collapsed');
       if (isCollapsed) {
-        openSidebar();
+        sidebar.classList.remove('collapsed');
+        if (mainContent) mainContent.classList.remove('expanded');
       } else {
-        closeSidebar();
+        sidebar.classList.add('collapsed');
+        if (mainContent) mainContent.classList.add('expanded');
+        closeFlyout();
       }
     });
   }
 
-  // Category trigger button CLICK ONLY (Hover won't trigger flyouts)
+  // 2. Category trigger button click toggles flyout menu
   triggers.forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -207,7 +166,7 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // Accordion drop-down toggles inside flyouts
+  // 3. Accordion dropdown toggles inside flyouts
   const dropdownTriggers = document.querySelectorAll('[data-dropdown-trigger]');
   dropdownTriggers.forEach((trigger) => {
     trigger.addEventListener('click', (e) => {
@@ -229,23 +188,27 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // Handle clicks on subnav items
+  // 4. Subnav item click -> Navigate & close menu
   const subnavItems = document.querySelectorAll('.subnav-item, .subnav-subitem');
   subnavItems.forEach((item) => {
     item.addEventListener('click', () => {
-      closeSidebar();
+      closeFlyout();
+      if (sidebar) sidebar.classList.add('collapsed');
+      if (mainContent) mainContent.classList.add('expanded');
     });
   });
 
-  // Direct icon clicks collapse sidebar
+  // 5. Direct icon clicks -> Collapse sidebar
   const directNavLinks = document.querySelectorAll('.sidebar-nav a.nav-icon-link');
   directNavLinks.forEach((link) => {
     link.addEventListener('click', () => {
-      closeSidebar();
+      closeFlyout();
+      if (sidebar) sidebar.classList.add('collapsed');
+      if (mainContent) mainContent.classList.add('expanded');
     });
   });
 
-  // Backdrop or outside click
+  // 6. Backdrop & outside click closes flyout
   if (backdrop) {
     backdrop.addEventListener('click', closeFlyout);
   }
