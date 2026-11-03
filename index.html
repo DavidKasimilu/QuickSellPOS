@@ -198,42 +198,27 @@
       </div>
 
       <nav class="sidebar-nav">
-        <!-- Main Dashboard Direct Link (Default) -->
         <a href="#dashboard" class="nav-icon-link active" data-nav="dashboard" title="Dashboard">
           <i data-lucide="layout-dashboard"></i>
         </a>
-
-        <!-- Sales Management Category Trigger -->
         <button class="nav-icon-link" data-menu-trigger="sales" title="Sales Management">
           <i data-lucide="receipt"></i>
         </button>
-
-        <!-- Product Catalog Category Trigger -->
         <button class="nav-icon-link" data-menu-trigger="products" title="Products & Catalog">
           <i data-lucide="package"></i>
         </button>
-
-        <!-- Inventory & Stock Category Trigger -->
         <button class="nav-icon-link" data-menu-trigger="inventory" title="Inventory & Stock">
           <i data-lucide="boxes"></i>
         </button>
-
-        <!-- Customers Category Trigger -->
         <button class="nav-icon-link" data-menu-trigger="customers" title="Customers & Debts">
           <i data-lucide="users"></i>
         </button>
-
-        <!-- Discounts Category Trigger -->
         <button class="nav-icon-link" data-menu-trigger="discounts" title="Discounts & Pricing">
           <i data-lucide="tag"></i>
         </button>
-
-        <!-- Employees Category Trigger (Accurate Icon) -->
         <button class="nav-icon-link" data-menu-trigger="employees" title="Employees & Staff">
           <i data-lucide="users-round"></i>
         </button>
-
-        <!-- Settings Category Trigger -->
         <button class="nav-icon-link" data-menu-trigger="settings" title="Store & System Settings">
           <i data-lucide="sliders-horizontal"></i>
         </button>
@@ -309,7 +294,7 @@
         </div>
       </div>
 
-      <!-- 3. INVENTORY MANAGEMENT GROUP (Matched Exact Items) -->
+      <!-- 3. INVENTORY MANAGEMENT GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="inventory">
         <div class="subnav-header">Inventory Management</div>
         <a href="#available-inventory" class="subnav-item" data-nav="available-inventory">Available inventory</a>
@@ -330,7 +315,7 @@
         <a href="#supplier-credit-settlements-report" class="subnav-item" data-nav="supplier-credit-settlements-report">Supplier credit settlements report</a>
       </div>
 
-      <!-- 4. CUSTOMERS GROUP (Matched Exact Items) -->
+      <!-- 4. CUSTOMERS GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="customers">
         <div class="subnav-header">Customers</div>
         <a href="#customers" class="subnav-item" data-nav="customers">Customers</a>
@@ -341,7 +326,7 @@
         <a href="#settlement-by-payment-types" class="subnav-item" data-nav="settlement-by-payment-types">Settlement by payment types</a>
       </div>
 
-      <!-- 5. DISCOUNTS & PRICING GROUP (Matched Exact Items) -->
+      <!-- 5. DISCOUNTS & PRICING GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="discounts">
         <div class="subnav-header">Discounts & Pricing</div>
         <a href="#discount-plans" class="subnav-item" data-nav="discount-plans">Discount plans</a>
@@ -349,7 +334,7 @@
         <a href="#price-change" class="subnav-item" data-nav="price-change">Price change</a>
       </div>
 
-      <!-- 6. EMPLOYEES GROUP (Matched Exact Items) -->
+      <!-- 6. EMPLOYEES GROUP -->
       <div class="subnav-group hidden" data-flyout-parent="employees">
         <div class="subnav-header">Employees</div>
         <a href="#employees" class="subnav-item" data-nav="employees">Employees</a>
@@ -377,44 +362,42 @@
     <div class="main-content">
       
       <!-- Top Action Bar -->
-      <header class="top-bar" style="display:flex; justify-content:space-between; align-items:center; padding:12px 24px; min-height:64px; flex-wrap:wrap; gap:12px; background:var(--bg-surface); border-bottom:1px solid var(--border-subtle);">
-        <div class="top-bar-left" style="display:flex; align-items:center; gap:12px;">
+      <header class="top-bar">
+        <div class="top-bar-left">
           <button class="btn-icon mobile-nav-toggle" id="btn-toggle-sidebar" title="Toggle Navigation">
             <i data-lucide="menu"></i>
           </button>
-          <h2 id="current-view-title" style="margin:0; font-size:1.25rem; font-weight:600;">Dashboard</h2>
+          <h2 id="current-view-title">Dashboard</h2>
           <span class="badge badge-teal" id="badge-active-shop">Main Store</span>
         </div>
 
-        <div class="top-bar-right" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-          <!-- Inline Filter Controls Bar (Visible only on Dashboard view) -->
-          <div class="date-controls" id="dashboard-date-controls" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <div style="display:inline-flex; gap:4px;">
-              <button class="date-chip active" data-period="today">Today</button>
-              <button class="date-chip" data-period="yesterday">Yesterday</button>
-            </div>
+        <div class="top-bar-right">
+          <!-- Compact Single-Row Date Filter Controls -->
+          <div class="date-controls" id="dashboard-date-controls">
+            <button class="date-chip active" data-period="today">Today</button>
+            <button class="date-chip" data-period="yesterday">Yesterday</button>
             
-            <select id="month-filter-select" class="form-select-sm" style="height:32px; font-size:0.85rem; padding:0 8px;">
-              <option value="">Month select...</option>
+            <select id="month-filter-select" class="form-select-sm">
+              <option value="">Month...</option>
               <option value="this-month">This Month</option>
               <option value="last-month">Last Month</option>
             </select>
 
-            <div class="date-range-wrap" style="display:inline-flex; gap:6px; align-items:center; background:var(--bg-app); border:1px solid var(--border-subtle); padding:2px 8px; border-radius:4px;">
-              <input type="date" id="stats-start-date" class="input-sm" style="border:none; background:transparent; font-size:0.8rem;" title="Start Date" />
+            <div class="date-range-wrap">
+              <input type="date" id="stats-start-date" title="Start Date" />
               <span style="font-size:0.75rem; color:var(--text-muted);">to</span>
-              <input type="date" id="stats-end-date" class="input-sm" style="border:none; background:transparent; font-size:0.8rem;" title="End Date" />
+              <input type="date" id="stats-end-date" title="End Date" />
             </div>
             
-            <div class="date-picker-wrap" style="display:inline-flex; align-items:center; gap:4px; background:var(--bg-app); border:1px solid var(--border-subtle); padding:2px 8px; border-radius:4px;">
-              <i data-lucide="calendar" class="icon-inline" style="width:14px; height:14px; color:var(--text-muted);"></i>
-              <input type="date" id="stats-calendar-filter" style="border:none; background:transparent; font-size:0.8rem;" title="Calendar Select" />
+            <div class="date-picker-wrap">
+              <i data-lucide="calendar" class="icon-inline"></i>
+              <input type="date" id="stats-calendar-filter" title="Calendar Select" />
             </div>
           </div>
           
-          <div class="profile-summary" id="top-user-pill" style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-app); padding:4px 8px; border-radius:16px; border:1px solid var(--border-subtle);">
-            <span class="user-role-tag" id="user-role-label" style="font-size:0.7rem; font-weight:700; background:var(--teal-600); color:#fff; padding:2px 6px; border-radius:10px;">ADMIN</span>
-            <span class="user-email-tag" id="user-email-label" style="font-size:0.8rem; color:var(--text-muted);">...</span>
+          <div class="profile-summary" id="top-user-pill">
+            <span class="user-role-tag" id="user-role-label">ADMIN</span>
+            <span class="user-email-tag" id="user-email-label">...</span>
           </div>
         </div>
       </header>
@@ -424,9 +407,7 @@
     </div>
   </div>
 
-  <!-- ========================================================================= -->
-  <!-- 3. PROFILE SETTINGS DRAWER                                                -->
-  <!-- ========================================================================= -->
+  <!-- Profile Settings Drawer -->
   <aside id="drawer-profile" class="drawer-panel hidden">
     <div class="drawer-content">
       <div class="drawer-header">
