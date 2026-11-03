@@ -4,6 +4,7 @@ import { globalState } from '../state.js';
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
   let unsubs = [];
+  let eventListenersCleanup = [];
 
   container.innerHTML = `
     <div class="kpi-grid">
@@ -91,37 +92,128 @@ export async function mount(container) {
     </div>
   `;
 
-  // Determine target date range based on active date controls or global state
+  // Determine target ISO start and end timestamps based on user date selections
   function getDateBounds() {
     const period = globalState.datePeriod || 'today';
     const now = new Date();
     let startDate = new Date();
     let endDate = new Date();
+    let label = 'Today';
 
-    if (period === 'yesterday') {
+    if (period === 'today') {
+      label = 'Today';
+    } else if (period === 'yesterday') {
       startDate.setDate(now.getDate() - 1);
       endDate.setDate(now.getDate() - 1);
-    } else if (period === '7days') {
-      startDate.setDate(now.getDate() - 6);
-    } else if (period === 'custom' && globalState.filterDate) {
+      label = 'Yesterday';
+    } else if (period === 'this-month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      label = 'This Month';
+    } else if (period === 'last-month') {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      endDate = new Date(now.getFullYear(), now.getMonth(), 0);
+      label = 'Last Month';
+    } else if (period === 'range' && globalState.startDate && globalState.endDate) {
+      startDate = new Date(globalState.startDate);
+      endDate = new Date(globalState.endDate);
+      label = `${globalState.startDate} to ${globalState.endDate}`;
+    } else if (period === 'calendar' && globalState.filterDate) {
       startDate = new Date(globalState.filterDate);
       endDate = new Date(globalState.filterDate);
+      label = globalState.filterDate;
     }
 
     const startISO = `${startDate.toISOString().split('T')[0]}T00:00:00.000Z`;
     const endISO = `${endDate.toISOString().split('T')[0]}T23:59:59.999Z`;
-    const label = period === '7days' ? 'Last 7 Days' : startDate.toISOString().split('T')[0];
 
     return { startISO, endISO, label };
   }
 
-  // Reactive listener: recalculates metrics immediately when orders update or date period changes
-  unsubs.push(
-    globalState.subscribeKey('orders', () => loadMetrics()),
-    globalState.subscribeKey('datePeriod', () => loadMetrics()),
-    globalState.subscribeKey('filterDate', () => loadMetrics())
-  );
+  // Bind top navbar date filter controls
+  function bindTopDateControls() {
+    const dateChips = document.querySelectorAll('#dashboard-date-controls .date-chip');
+    const monthSelect = document.getElementById('month-filter-select');
+    const startDateInput = document.getElementById('stats-start-date');
+    const endDateInput = document.getElementById('stats-end-date');
+    const calendarInput = document.getElementById('stats-calendar-filter');
 
+    // Handle Today / Yesterday chips
+    dateChips.forEach((chip) => {
+      const handler = (e) => {
+        dateChips.forEach((c) => c.classList.remove('active'));
+        e.target.classList.add('active');
+
+        if (monthSelect) monthSelect.value = '';
+        if (startDateInput) startDateInput.value = '';
+        if (endDateInput) endDateInput.value = '';
+        if (calendarInput) calendarInput.value = '';
+
+        globalState.datePeriod = e.target.dataset.period;
+        loadMetrics();
+      };
+      chip.addEventListener('click', handler);
+      eventListenersCleanup.push(() => chip.removeEventListener('click', handler));
+    });
+
+    // Handle Month Select
+    if (monthSelect) {
+      const monthHandler = (e) => {
+        if (!e.target.value) return;
+        dateChips.forEach((c) => c.classList.remove('active'));
+        if (startDateInput) startDateInput.value = '';
+        if (endDateInput) endDateInput.value = '';
+        if (calendarInput) calendarInput.value = '';
+
+        globalState.datePeriod = e.target.value;
+        loadMetrics();
+      };
+      monthSelect.addEventListener('change', monthHandler);
+      eventListenersCleanup.push(() => monthSelect.removeEventListener('change', monthHandler));
+    }
+
+    // Handle Start & End Date Inputs
+    const rangeHandler = () => {
+      if (startDateInput?.value && endDateInput?.value) {
+        dateChips.forEach((c) => c.classList.remove('active'));
+        if (monthSelect) monthSelect.value = '';
+        if (calendarInput) calendarInput.value = '';
+
+        globalState.datePeriod = 'range';
+        globalState.startDate = startDateInput.value;
+        globalState.endDate = endDateInput.value;
+        loadMetrics();
+      }
+    };
+
+    if (startDateInput && endDateInput) {
+      startDateInput.addEventListener('change', rangeHandler);
+      endDateInput.addEventListener('change', rangeHandler);
+      eventListenersCleanup.push(
+        () => startDateInput.removeEventListener('change', rangeHandler),
+        () => endDateInput.removeEventListener('change', rangeHandler)
+      );
+    }
+
+    // Handle Calendar Picker
+    if (calendarInput) {
+      const calendarHandler = (e) => {
+        if (!e.target.value) return;
+        dateChips.forEach((c) => c.classList.remove('active'));
+        if (monthSelect) monthSelect.value = '';
+        if (startDateInput) startDateInput.value = '';
+        if (endDateInput) endDateInput.value = '';
+
+        globalState.datePeriod = 'calendar';
+        globalState.filterDate = e.target.value;
+        loadMetrics();
+      };
+      calendarInput.addEventListener('change', calendarHandler);
+      eventListenersCleanup.push(() => calendarInput.removeEventListener('change', calendarHandler));
+    }
+  }
+
+  // Fetch sales metrics from Supabase with shop-isolation and date filtering
   async function loadMetrics() {
     const { startISO, endISO, label } = getDateBounds();
 
@@ -210,30 +302,13 @@ export async function mount(container) {
     `;
   }
 
-  // Setup top header date controls interaction
-  const dateChips = document.querySelectorAll('.date-chip');
-  dateChips.forEach((chip) => {
-    chip.addEventListener('click', (e) => {
-      dateChips.forEach((c) => c.classList.remove('active'));
-      e.target.classList.add('active');
-      const period = e.target.dataset.period;
-      globalState.datePeriod = period;
-      loadMetrics();
-    });
-  });
+  // Reactive listener for state changes
+  unsubs.push(
+    globalState.subscribeKey('orders', () => loadMetrics()),
+    globalState.subscribeKey('datePeriod', () => loadMetrics())
+  );
 
-  const dateInput = document.getElementById('stats-calendar-filter');
-  if (dateInput) {
-    dateInput.addEventListener('change', (e) => {
-      if (e.target.value) {
-        dateChips.forEach((c) => c.classList.remove('active'));
-        globalState.datePeriod = 'custom';
-        globalState.filterDate = e.target.value;
-        loadMetrics();
-      }
-    });
-  }
-
+  bindTopDateControls();
   await loadMetrics();
 
   if (window.lucide) {
@@ -242,5 +317,6 @@ export async function mount(container) {
 
   return () => {
     unsubs.forEach((unsub) => unsub && unsub());
+    eventListenersCleanup.forEach((cleanup) => cleanup && cleanup());
   };
 }

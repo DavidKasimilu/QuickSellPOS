@@ -13,11 +13,15 @@ export async function mount(container) {
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
       <div>
+        <span class="live-indicator" style="font-size:0.75rem; color:var(--teal-600); display:inline-flex; align-items:center; gap:4px;">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--teal-600);"></span>
+          System Settings Active
+        </span>
       </div>
       <div id="settings-action-container"></div>
     </div>
 
-    <!-- Group 7 Submenu Navigation Tabs -->
+    <!-- Submenu Navigation Tabs -->
     <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto;">
       <button class="date-chip active" data-set-tab="sessions">Active POS Terminals</button>
       <button class="date-chip" data-set-tab="shops">Store Branches</button>
@@ -252,6 +256,7 @@ export async function mount(container) {
           render: (val, row) => `<strong>${val}</strong> ${globalState.activeShopId === row.id ? '<span class="badge badge-teal">ACTIVE</span>' : ''}` 
         },
         { label: 'Branch Code', key: 'branch_code', render: (code) => `<code>${code || '-'}</code>` },
+        { label: 'Country', key: 'country', render: (c) => c || 'Kenya' },
         { label: 'Phone', key: 'phone', render: (p) => p || '-' },
         { label: 'Base Currency', key: 'currency' },
         { label: 'Location Address', key: 'address', render: (a) => a || '-' },
@@ -500,21 +505,41 @@ export async function mount(container) {
         <form id="form-shop-create">
           <div class="form-group">
             <label>Branch Name</label>
-            <input type="text" name="name" required placeholder="e.g. QuickSell Mariwenyi Outlet" />
+            <input type="text" name="name" required placeholder="e.g. QuickSell Main Outlet" />
           </div>
           <div class="form-group">
             <label>Branch Code</label>
-            <input type="text" name="branch_code" required placeholder="MRW-01" />
+            <input type="text" name="branch_code" required placeholder="BRN-01" />
           </div>
           <div class="form-row" style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
-              <label>Phone Contact</label>
-              <input type="text" name="phone" placeholder="+254 7..." />
+              <label>Country</label>
+              <select name="country">
+                <option value="Kenya" selected>Kenya</option>
+                <option value="Tanzania">Tanzania</option>
+                <option value="Uganda">Uganda</option>
+                <option value="Rwanda">Rwanda</option>
+                <option value="Nigeria">Nigeria</option>
+                <option value="South Africa">South Africa</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
             <div class="form-group" style="flex:1;">
               <label>Base Currency</label>
-              <input type="text" name="currency" value="KES" required />
+              <select name="currency">
+                <option value="KES" selected>KES</option>
+                <option value="TZS">TZS</option>
+                <option value="UGX">UGX</option>
+                <option value="RWF">RWF</option>
+                <option value="NGN">NGN</option>
+                <option value="ZAR">ZAR</option>
+                <option value="USD">USD</option>
+              </select>
             </div>
+          </div>
+          <div class="form-group">
+            <label>Phone Contact</label>
+            <input type="text" name="phone" placeholder="+254 7..." />
           </div>
           <div class="form-group">
             <label>Address / Location</label>

@@ -8,6 +8,13 @@ export async function mount(container) {
   let selectedProductIds = new Set();
   let unsubs = [];
 
+  // Helper to generate unique 13-digit EAN/UPC style barcode string
+  function generateAutoBarcode() {
+    const timeStamp = Date.now().toString().slice(-9);
+    const randomDigits = Math.floor(1000 + Math.random() * 9000).toString();
+    return `${timeStamp}${randomDigits}`;
+  }
+
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
       <div style="display:flex; align-items:center; gap:12px;">
@@ -15,6 +22,9 @@ export async function mount(container) {
         <span class="badge badge-teal" id="product-count-badge">0 items</span>
       </div>
       <div style="display:flex; gap:8px;">
+        <button class="btn btn-outline" id="btn-print-barcodes-modal">
+          <i data-lucide="barcode" style="width:16px; height:16px; margin-right:6px;"></i> Print Barcodes
+        </button>
         <button class="btn btn-danger hidden" id="btn-batch-delete">
           <i data-lucide="trash-2" style="width:16px; height:16px; margin-right:6px;"></i> Delete Selected (<span id="batch-count">0</span>)
         </button>
@@ -30,7 +40,8 @@ export async function mount(container) {
   `;
 
   document.getElementById('btn-add-product').onclick = () => openProductModal();
-  
+  document.getElementById('btn-print-barcodes-modal').onclick = () => openPrintBarcodesModal();
+
   const batchDelBtn = document.getElementById('btn-batch-delete');
   batchDelBtn.onclick = () => batchSoftDeleteProducts();
 
@@ -154,7 +165,7 @@ export async function mount(container) {
       };
     });
 
-    // Single Actions
+    // Edit Product Trigger
     tableArea.querySelectorAll('.btn-edit-prod').forEach((btn) => {
       btn.onclick = () => {
         const prod = prods.find((p) => p.id === btn.dataset.id);
@@ -162,6 +173,7 @@ export async function mount(container) {
       };
     });
 
+    // Delete Product Trigger
     tableArea.querySelectorAll('.btn-del-prod').forEach((btn) => {
       btn.onclick = () => {
         const prod = prods.find((p) => p.id === btn.dataset.id);
@@ -186,10 +198,11 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // Product Edit / Create Modal with Supabase Storage Image Upload
+  // Product Edit / Create Modal with Auto Barcode Generation
   // =========================================================================
   async function openProductModal(prod = null) {
     const isEdit = !!prod;
+    const initialBarcode = prod?.barcode || generateAutoBarcode();
 
     const [catRes, unitRes] = await Promise.all([
       supabase.from('categories').select('id, name').is('deleted_at', null).order('name'),
@@ -224,8 +237,11 @@ export async function mount(container) {
 
           <div class="form-row" style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
-              <label>Barcode</label>
-              <input type="text" name="barcode" value="${prod?.barcode || ''}" placeholder="Scan or enter code" />
+              <label style="display:flex; justify-content:space-between; align-items:center;">
+                <span>Barcode (Auto-Generated)</span>
+                <button type="button" class="text-link" id="btn-regen-barcode" style="font-size:0.75rem;">Generate New</button>
+              </label>
+              <input type="text" id="input-prod-barcode" name="barcode" value="${initialBarcode}" placeholder="Scan or auto code" required />
             </div>
             <div class="form-group" style="flex:1;">
               <label>SKU Identifier</label>
@@ -265,6 +281,15 @@ export async function mount(container) {
           <button type="submit" class="btn btn-teal-primary btn-block">${isEdit ? 'Update Item' : 'Save Product'}</button>
         </form>
       `,
+      onOpen: () => {
+        const regenBtn = document.getElementById('btn-regen-barcode');
+        const barcodeInput = document.getElementById('input-prod-barcode');
+        if (regenBtn && barcodeInput) {
+          regenBtn.onclick = () => {
+            barcodeInput.value = generateAutoBarcode();
+          };
+        }
+      },
       onSubmit: async (fd) => {
         const nowIso = new Date().toISOString();
         let imageUrl = prod?.image_url || null;
@@ -290,11 +315,13 @@ export async function mount(container) {
           }
         }
 
+        const barcodeVal = fd.barcode ? fd.barcode.trim() : generateAutoBarcode();
+
         const payload = {
           shop_id: globalState.activeShopId,
           name: fd.name,
           image_url: imageUrl,
-          barcode: fd.barcode || null,
+          barcode: barcodeVal,
           sku: fd.sku || null,
           retail_price: parseFloat(fd.retail_price) || 0,
           cost_price: parseFloat(fd.cost_price) || 0,
@@ -335,6 +362,77 @@ export async function mount(container) {
 
         Toast.success('Product saved successfully.');
         await fetchAndRenderProducts();
+      },
+    });
+  }
+
+  // =========================================================================
+  // Print Barcode Popup Modal Action
+  // =========================================================================
+  async function openPrintBarcodesModal() {
+    let query = supabase.from('products').select('id, name, barcode, retail_price').eq('is_active', true).is('deleted_at', null);
+    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+
+    const { data: products } = await query;
+
+    if (!products || !products.length) {
+      Toast.error('No products available for barcode generation.');
+      return;
+    }
+
+    const optionsHtml = products.map((p) => 
+      `<option value="${p.id}">${p.name} (Barcode: ${p.barcode || 'N/A'})</option>`
+    ).join('');
+
+    Modal.open({
+      title: 'Print Product Barcodes',
+      content: `
+        <form id="form-print-barcodes">
+          <div class="form-group">
+            <label>Select Item to Print Barcode</label>
+            <select id="barcode-select-product" required>${optionsHtml}</select>
+          </div>
+          <div class="form-group">
+            <label>Number of Barcode Labels</label>
+            <input type="number" id="barcode-print-count" value="1" min="1" max="100" required />
+          </div>
+          <button type="submit" class="btn btn-teal-primary btn-block">
+            <i data-lucide="printer" style="width:16px; height:16px; margin-right:6px;"></i> Launch Print Barcode Sheet
+          </button>
+        </form>
+      `,
+      onSubmit: async () => {
+        const prodId = document.getElementById('barcode-select-product').value;
+        const printCount = parseInt(document.getElementById('barcode-print-count').value) || 1;
+
+        const prod = products.find((p) => p.id === prodId);
+        if (!prod) return;
+
+        const printWindow = window.open('', '_blank');
+        const barcodeCode = prod.barcode || generateAutoBarcode();
+
+        let labelsMarkup = '';
+        for (let i = 0; i < printCount; i++) {
+          labelsMarkup += `
+            <div style="border:1px dashed #000; padding:8px; text-align:center; width:180px; display:inline-block; margin:6px; font-family:sans-serif;">
+              <strong style="font-size:12px; display:block; text-transform:uppercase;">${prod.name}</strong>
+              <div style="font-size:18px; letter-spacing:4px; font-family:'Courier New', monospace; font-weight:bold; margin:6px 0;">*${barcodeCode}*</div>
+              <span style="font-size:11px;">Price: ${Number(prod.retail_price || 0).toLocaleString()} ${currency}</span>
+            </div>
+          `;
+        }
+
+        printWindow.document.write(`
+          <html>
+            <head><title>Print Barcodes - ${prod.name}</title></head>
+            <body onload="window.print(); window.close();">
+              <div style="display:flex; flex-wrap:wrap; justify-content:flex-start;">
+                ${labelsMarkup}
+              </div>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
       },
     });
   }

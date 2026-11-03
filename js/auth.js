@@ -47,9 +47,14 @@ export const Auth = {
 
   // Confirm registration 8-digit OTP token
   async verifySignUpOTP(email, token) {
+    const cleanToken = token ? token.trim() : '';
+    if (cleanToken.length !== 8 || !/^\d{8}$/.test(cleanToken)) {
+      throw new Error('Please enter a valid 8-digit security verification code.');
+    }
+
     const { data, error } = await supabase.auth.verifyOtp({
       email,
-      token,
+      token: cleanToken,
       type: 'signup',
     });
     if (error) throw error;
@@ -64,19 +69,28 @@ export const Auth = {
     return data;
   },
 
-  // Verify password recovery OTP
+  // Verify password recovery 8-digit OTP token
   async verifyPasswordResetOTP(email, token) {
+    const cleanToken = token ? token.trim() : '';
+    if (cleanToken.length !== 8 || !/^\d{8}$/.test(cleanToken)) {
+      throw new Error('Please enter a valid 8-digit security verification code.');
+    }
+
     const { data, error } = await supabase.auth.verifyOtp({
       email,
-      token,
+      token: cleanToken,
       type: 'recovery',
     });
     if (error) throw error;
     return data;
   },
 
-  // Set new password after OTP verification
+  // Set new password after OTP verification (minimum 8 characters)
   async updatePassword(newPassword) {
+    if (!newPassword || newPassword.length < 8) {
+      throw new Error('Password must be at least 8 characters in length.');
+    }
+
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword,
     });
@@ -84,7 +98,7 @@ export const Auth = {
     return data;
   },
 
-  // Read session, load Postgres trigger profile, and synchronize memory store
+  // Read session, load profile, and synchronize memory store
   async syncSession() {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error || !session?.user) {
@@ -102,15 +116,17 @@ export const Auth = {
       .eq('id', user.id)
       .maybeSingle();
 
-    // Fallback profile synchronization if trigger hasn't committed yet
+    // Fallback profile synchronization if database trigger hasn't committed yet
     if (!profile) {
       const isAdminAccount = user.email === 'davidkasimilu71@gmail.com';
+      const userMeta = user.user_metadata || {};
       const { data: createdProfile } = await supabase
         .from('profiles')
         .upsert([{
           id: user.id,
           email: user.email,
-          full_name: user.user_metadata?.full_name || '',
+          full_name: userMeta.full_name || '',
+          country: userMeta.country || 'Kenya',
           role: isAdminAccount ? 'admin' : 'cashier',
           updated_at: new Date().toISOString()
         }])
@@ -119,7 +135,7 @@ export const Auth = {
       profile = createdProfile;
     }
 
-    // Load active shop context
+    // Load active shop context strictly matching profile or user assignments
     let activeShop = null;
     if (profile?.shop_id) {
       const { data: shop } = await supabase
@@ -129,7 +145,7 @@ export const Auth = {
         .maybeSingle();
       if (shop) activeShop = shop;
     } else {
-      // If admin has no store pinned, select the first available branch
+      // Select first available shop branch
       const { data: firstShop } = await supabase
         .from('shops')
         .select('*')

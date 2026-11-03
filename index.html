@@ -138,16 +138,16 @@
         </p>
       </form>
 
-      <!-- OTP Verification View -->
+      <!-- OTP Verification View (8 Digits) -->
       <form id="form-otp" class="auth-form hidden">
         <div class="otp-notice">
           <i data-lucide="shield-check" class="text-teal"></i>
-          <p>We've sent a 6-digit code to <strong id="otp-target-email"></strong></p>
+          <p>We've sent an 8-digit code to <strong id="otp-target-email"></strong></p>
         </div>
         <div class="form-group">
-          <label for="otp-code">Enter 6-Digit OTP</label>
-          <input type="text" id="otp-code" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" 
-                 class="otp-input" placeholder="000000" required />
+          <label for="otp-code">Enter 8-Digit OTP</label>
+          <input type="text" id="otp-code" maxlength="8" pattern="[0-9]{8}" inputmode="numeric" 
+                 class="otp-input" placeholder="00000000" required />
         </div>
         <button type="submit" class="btn btn-teal-primary btn-block">Verify Code</button>
         <button type="button" id="btn-cancel-otp" class="btn btn-outline btn-block mt-2">Back</button>
@@ -166,17 +166,17 @@
         <p class="auth-switch"><a href="#" id="link-goto-login-2">Return to login</a></p>
       </form>
 
-      <!-- New Password Reset View -->
+      <!-- New Password Reset View (8 Digits OTP) -->
       <form id="form-reset-password" class="auth-form hidden">
         <div class="form-group">
-          <label for="reset-otp">6-Digit Code</label>
-          <input type="text" id="reset-otp" maxlength="6" inputmode="numeric" class="otp-input" placeholder="000000" required />
+          <label for="reset-otp">8-Digit Code</label>
+          <input type="text" id="reset-otp" maxlength="8" pattern="[0-9]{8}" inputmode="numeric" class="otp-input" placeholder="00000000" required />
         </div>
         <div class="form-group">
           <label for="reset-new-password">New Password</label>
           <div class="input-icon-wrap">
             <i data-lucide="lock"></i>
-            <input type="password" id="reset-new-password" required minlength="6" placeholder="New secure password" />
+            <input type="password" id="reset-new-password" required minlength="8" placeholder="New secure password" />
           </div>
         </div>
         <button type="submit" class="btn btn-teal-primary btn-block">Set New Password</button>
@@ -218,19 +218,19 @@
           <i data-lucide="boxes"></i>
         </button>
 
-        <!-- Customers & Debtors Category Trigger -->
-        <button class="nav-icon-link" data-menu-trigger="customers" title="Customers & Debtors">
+        <!-- Customers Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="customers" title="Customers & Debts">
           <i data-lucide="users"></i>
         </button>
 
-        <!-- Promotions & Plans Category Trigger -->
-        <button class="nav-icon-link" data-menu-trigger="promotions" title="Discounts & Plans">
+        <!-- Discounts Category Trigger -->
+        <button class="nav-icon-link" data-menu-trigger="discounts" title="Discounts & Pricing">
           <i data-lucide="tag"></i>
         </button>
 
-        <!-- Employees & Roles Category Trigger -->
-        <button class="nav-icon-link" data-menu-trigger="employees" title="Employees & Roles">
-          <i data-lucide="badge-percent"></i>
+        <!-- Employees Category Trigger (Accurate Icon) -->
+        <button class="nav-icon-link" data-menu-trigger="employees" title="Employees & Staff">
+          <i data-lucide="users-round"></i>
         </button>
 
         <!-- Settings Category Trigger -->
@@ -263,7 +263,6 @@
         <a href="#sales-summary?tab=charges" class="subnav-item" data-nav="sales-summary">Charges</a>
         <a href="#sales-summary?tab=shifts" class="subnav-item" data-nav="sales-summary">Shifts</a>
         
-        <!-- Accordion Dropdown: Advanced Sales Report -->
         <div class="subnav-dropdown-toggle" data-dropdown-trigger="advanced-sales-report">
           <span>Advanced Sales Report</span>
           <i data-lucide="chevron-down" class="dropdown-icon"></i>
@@ -282,7 +281,6 @@
           <a href="#sales-summary?tab=ecommerce-sales" class="subnav-subitem">Ecommerce sales</a>
         </div>
 
-        <!-- Accordion Dropdown: Suspicious Reports -->
         <div class="subnav-dropdown-toggle" data-dropdown-trigger="suspicious-reports">
           <span>Suspicious Reports</span>
           <i data-lucide="chevron-down" class="dropdown-icon"></i>
@@ -301,9 +299,7 @@
         <a href="#categories" class="subnav-item" data-nav="categories">Categories</a>
         <a href="#modifiers" class="subnav-item" data-nav="modifiers">Modifiers</a>
         <a href="#measurements" class="subnav-item" data-nav="measurements">Measurements</a>
-        <a href="#barcode-generator" class="subnav-item" data-nav="barcode-generator">Barcode Generator</a>
         
-        <!-- More Dropdown for Deleted Items -->
         <div class="subnav-dropdown-toggle" data-dropdown-trigger="products-more">
           <span>More</span>
           <i data-lucide="chevron-down" class="dropdown-icon"></i>
@@ -313,53 +309,54 @@
         </div>
       </div>
 
-      <!-- 3. INVENTORY CONTROL & SUPPLY GROUP -->
+      <!-- 3. INVENTORY MANAGEMENT GROUP (Matched Exact Items) -->
       <div class="subnav-group hidden" data-flyout-parent="inventory">
-        <div class="subnav-header">Inventory Control</div>
-        <a href="#inventory" class="subnav-item" data-nav="inventory">Available Inventory</a>
-        <a href="#inventory?tab=adjustments" class="subnav-item" data-nav="inventory">Stock Adjustments (SA)</a>
-        <a href="#inventory?tab=po" class="subnav-item" data-nav="inventory">Purchase Orders (PO)</a>
-        <a href="#inventory?tab=grn" class="subnav-item" data-nav="inventory">Goods Received Note (GRN)</a>
-        <a href="#inventory?tab=prn" class="subnav-item" data-nav="inventory">Purchase Return Note (PRN)</a>
-        <a href="#inventory?tab=tog" class="subnav-item" data-nav="inventory">Transfer of Goods (TOG)</a>
-        <a href="#inventory?tab=counts" class="subnav-item" data-nav="inventory">Inventory Counts</a>
-        <a href="#inventory?tab=suppliers" class="subnav-item" data-nav="inventory">Suppliers & Vendors</a>
-        <a href="#inventory?tab=credit" class="subnav-item" data-nav="inventory">Supplier Credit & Settlements</a>
-
-        <div class="subnav-dropdown-toggle" data-dropdown-trigger="inventory-reports">
-          <span>Inventory Reports</span>
-          <i data-lucide="chevron-down" class="dropdown-icon"></i>
-        </div>
-        <div class="subnav-dropdown-content hidden" data-dropdown-content="inventory-reports">
-          <a href="#inventory?tab=history-report" class="subnav-subitem">Inventory History Report</a>
-          <a href="#inventory?tab=expiry-report" class="subnav-subitem">Inventory Expiry Report</a>
-          <a href="#inventory?tab=valuation-report" class="subnav-subitem">Inventory Valuation Report</a>
-          <a href="#inventory?tab=summary-report" class="subnav-subitem">Inventory Summary Report</a>
-          <a href="#inventory?tab=backdate-report" class="subnav-subitem">Backdate Inventory Report</a>
-        </div>
+        <div class="subnav-header">Inventory Management</div>
+        <a href="#available-inventory" class="subnav-item" data-nav="available-inventory">Available inventory</a>
+        <a href="#purchase-orders" class="subnav-item" data-nav="purchase-orders">Purchase orders (PO)</a>
+        <a href="#goods-received-note" class="subnav-item" data-nav="goods-received-note">Goods received note (GRN)</a>
+        <a href="#purchase-return-note" class="subnav-item" data-nav="purchase-return-note">Purchase return note (PRN)</a>
+        <a href="#stock-adjustments" class="subnav-item" data-nav="stock-adjustments">Stock adjustments (SA)</a>
+        <a href="#transfer-of-goods" class="subnav-item" data-nav="transfer-of-goods">Transfer of goods (TOG)</a>
+        <a href="#inventory-counts" class="subnav-item" data-nav="inventory-counts">Inventory counts</a>
+        <a href="#productions" class="subnav-item" data-nav="productions">Productions</a>
+        <a href="#suppliers" class="subnav-item" data-nav="suppliers">Suppliers</a>
+        <a href="#supplier-credit-management" class="subnav-item" data-nav="supplier-credit-management">Supplier credit management</a>
+        <a href="#inventory-history-report" class="subnav-item" data-nav="inventory-history-report">Inventory history report</a>
+        <a href="#inventory-expiry-report" class="subnav-item" data-nav="inventory-expiry-report">Inventory expiry report</a>
+        <a href="#inventory-valuation-report" class="subnav-item" data-nav="inventory-valuation-report">Inventory valuation report</a>
+        <a href="#inventory-summary-report" class="subnav-item" data-nav="inventory-summary-report">Inventory summary report</a>
+        <a href="#backdate-inventory-report" class="subnav-item" data-nav="backdate-inventory-report">Backdate inventory report</a>
+        <a href="#supplier-credit-settlements-report" class="subnav-item" data-nav="supplier-credit-settlements-report">Supplier credit settlements report</a>
       </div>
 
-      <!-- 4. CUSTOMER ACCOUNTS GROUP -->
+      <!-- 4. CUSTOMERS GROUP (Matched Exact Items) -->
       <div class="subnav-group hidden" data-flyout-parent="customers">
-        <div class="subnav-header">Customer Accounts</div>
-        <a href="#customers" class="subnav-item" data-nav="customers">Customer Directory</a>
-        <a href="#customers?tab=debtors" class="subnav-item" data-nav="customers">Debtors & Store Credit</a>
-        <a href="#customers?tab=groups" class="subnav-item" data-nav="customers">Customer Groups & Loyalty</a>
+        <div class="subnav-header">Customers</div>
+        <a href="#customers" class="subnav-item" data-nav="customers">Customers</a>
+        <a href="#loyalty" class="subnav-item" data-nav="loyalty">Loyalty</a>
+        <a href="#debtor-management" class="subnav-item" data-nav="debtor-management">Debtor management</a>
+        <a href="#debtor" class="subnav-item" data-nav="debtor">Debtor</a>
+        <a href="#credit-settlements" class="subnav-item" data-nav="credit-settlements">Credit settlements</a>
+        <a href="#settlement-by-payment-types" class="subnav-item" data-nav="settlement-by-payment-types">Settlement by payment types</a>
       </div>
 
-      <!-- 5. PROMOTIONS & DISCOUNTS GROUP -->
-      <div class="subnav-group hidden" data-flyout-parent="promotions">
-        <div class="subnav-header">Promotions & Discounts</div>
-        <a href="#promotions" class="subnav-item" data-nav="promotions">Active Campaigns</a>
-        <a href="#promotions?tab=rules" class="subnav-item" data-nav="promotions">Discount Rules</a>
+      <!-- 5. DISCOUNTS & PRICING GROUP (Matched Exact Items) -->
+      <div class="subnav-group hidden" data-flyout-parent="discounts">
+        <div class="subnav-header">Discounts & Pricing</div>
+        <a href="#discount-plans" class="subnav-item" data-nav="discount-plans">Discount plans</a>
+        <a href="#pricing-plans" class="subnav-item" data-nav="pricing-plans">Pricing plans</a>
+        <a href="#price-change" class="subnav-item" data-nav="price-change">Price change</a>
       </div>
 
-      <!-- 6. STAFF & SECURITY GROUP -->
+      <!-- 6. EMPLOYEES GROUP (Matched Exact Items) -->
       <div class="subnav-group hidden" data-flyout-parent="employees">
-        <div class="subnav-header">Staff & Security</div>
-        <a href="#employees" class="subnav-item" data-nav="employees">Employee List</a>
-        <a href="#employees?tab=roles" class="subnav-item" data-nav="employees">Roles & Permissions</a>
-        <a href="#employees?tab=shifts" class="subnav-item" data-nav="employees">Staff Performance & Shifts</a>
+        <div class="subnav-header">Employees</div>
+        <a href="#employees" class="subnav-item" data-nav="employees">Employees</a>
+        <a href="#access-rights" class="subnav-item" data-nav="access-rights">Access rights</a>
+        <a href="#other-staff" class="subnav-item" data-nav="other-staff">Other staff</a>
+        <a href="#staff-commissions" class="subnav-item" data-nav="staff-commissions">Staff commissions</a>
+        <a href="#access-logs" class="subnav-item" data-nav="access-logs">Access logs</a>
       </div>
 
       <!-- 7. SYSTEM & STORE SETUP GROUP -->
@@ -390,16 +387,26 @@
         </div>
 
         <div class="top-bar-right">
-          <div class="date-controls">
+          <!-- Date Filter Controls: Strictly visible on Dashboard only -->
+          <div class="date-controls" id="dashboard-date-controls">
             <button class="date-chip active" data-period="today">Today</button>
             <button class="date-chip" data-period="yesterday">Yesterday</button>
-            <button class="date-chip" data-period="7days">Last 7 Days</button>
-            <button class="date-chip" data-period="month">This Month</button>
-            <button class="date-chip" data-period="last-month">Last Month</button>
+            
+            <select id="month-filter-select" class="form-select-sm">
+              <option value="">Month select...</option>
+              <option value="this-month">This Month</option>
+              <option value="last-month">Last Month</option>
+            </select>
+
+            <div class="date-range-wrap" style="display:flex; gap:6px; align-items:center;">
+              <input type="date" id="stats-start-date" class="input-sm" title="Start Date" />
+              <span>to</span>
+              <input type="date" id="stats-end-date" class="input-sm" title="End Date" />
+            </div>
             
             <div class="date-picker-wrap">
               <i data-lucide="calendar" class="icon-inline"></i>
-              <input type="date" id="stats-calendar-filter" />
+              <input type="date" id="stats-calendar-filter" title="Calendar Select" />
             </div>
           </div>
           
@@ -443,12 +450,37 @@
         <div class="form-section">
           <h4>Regional & Currency Setup</h4>
           
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:1;">
+              <label for="profile-country">Country</label>
+              <select id="profile-country" required>
+                <option value="Kenya">Kenya</option>
+                <option value="Tanzania">Tanzania</option>
+                <option value="Uganda">Uganda</option>
+                <option value="Rwanda">Rwanda</option>
+                <option value="Nigeria">Nigeria</option>
+                <option value="South Africa">South Africa</option>
+                <option value="United Kingdom">United Kingdom</option>
+                <option value="United States">United States</option>
+              </select>
+            </div>
+
+            <div class="form-group" style="flex:1;">
+              <label for="profile-phone-code">Phone Country Code</label>
+              <input type="text" id="profile-phone-code" placeholder="+254" required />
+            </div>
+          </div>
+
           <div class="form-group">
             <label for="profile-currency">Currency Preference</label>
-            <select id="profile-currency">
-              <option value="KES" selected>KES - Kenyan Shilling</option>
+            <select id="profile-currency" required>
+              <option value="KES">KES - Kenyan Shilling</option>
               <option value="TZS">TZS - Tanzanian Shilling</option>
-              <option value="UGS">UGS - Ugandan Shilling</option>
+              <option value="UGX">UGX - Ugandan Shilling</option>
+              <option value="RWF">RWF - Rwandan Franc</option>
+              <option value="NGN">NGN - Nigerian Naira</option>
+              <option value="ZAR">ZAR - South African Rand</option>
+              <option value="GBP">GBP - British Pound</option>
               <option value="USD">USD - US Dollar</option>
             </select>
           </div>
@@ -462,39 +494,13 @@
               <option value="UTC">UTC Universal Time</option>
             </select>
           </div>
-
-          <div class="form-row" style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;">
-              <label for="profile-date-format">Date Format</label>
-              <select id="profile-date-format">
-                <option value="DD/MM/YYYY" selected>DD/MM/YYYY</option>
-                <option value="YYYY-MM-DD">YYYY-MM-DD</option>
-                <option value="MM/DD/YYYY">MM/DD/YYYY</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex:1;">
-              <label for="profile-time-format">Time Format</label>
-              <select id="profile-time-format">
-                <option value="12h">12-hour</option>
-                <option value="24h" selected>24-hour</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="profile-language">System Language</label>
-            <select id="profile-language">
-              <option value="en" selected>English (Default)</option>
-              <option value="sw">Kiswahili</option>
-            </select>
-          </div>
         </div>
 
         <div class="form-section">
           <h4>Security</h4>
           <div class="form-group">
             <label for="profile-new-password">Change Password</label>
-            <input type="password" id="profile-new-password" minlength="6" placeholder="Enter new password to change" />
+            <input type="password" id="profile-new-password" minlength="8" placeholder="Enter new password (min. 8 chars)" />
           </div>
         </div>
 
