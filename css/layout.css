@@ -40,7 +40,7 @@ html, body {
 }
 
 /* ==========================================================================
-   Sidebar Navigation Rail (Collapsible Overlay / Rail)
+   Sidebar Navigation Rail
    ========================================================================== */
 .sidebar {
   position: fixed;
@@ -62,7 +62,6 @@ html, body {
   transition: transform var(--transition-smooth);
 }
 
-/* Hidden Side Nav State (Collapses off-screen) */
 .sidebar.collapsed {
   transform: translateX(-100%);
 }
@@ -108,7 +107,6 @@ html, body {
   width: 100%;
 }
 
-/* Icon fallback enforcement */
 svg.lucide, i[data-lucide] {
   width: 20px;
   height: 20px;
@@ -273,7 +271,7 @@ svg.lucide, i[data-lucide] {
 }
 
 /* ==========================================================================
-   Main Content Workspace
+   Main Content Workspace & Header Alignment
    ========================================================================== */
 .main-content {
   flex: 1;
@@ -293,24 +291,27 @@ svg.lucide, i[data-lucide] {
   width: 100vw;
 }
 
-/* Header Top Bar Layout */
+/* Standardized Top Bar Navigation (Strict 64px Height) */
 .top-bar {
-  min-height: var(--topbar-height);
-  padding: 0 24px;
+  height: var(--topbar-height);
+  max-height: var(--topbar-height);
+  padding: 0 20px;
   background: var(--bg-card);
   border-bottom: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   z-index: var(--z-topbar);
   flex-shrink: 0;
+  overflow: hidden;
 }
 
-.top-bar-left, .top-bar-right {
+.top-bar-left {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .top-bar-left h2 {
@@ -318,6 +319,14 @@ svg.lucide, i[data-lucide] {
   font-weight: 700;
   color: var(--text-main);
   white-space: nowrap;
+}
+
+.top-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .mobile-nav-toggle {
@@ -339,9 +348,7 @@ svg.lucide, i[data-lucide] {
   color: var(--teal-600);
 }
 
-/* ==========================================================================
-   Dashboard Date Filter Controls Alignment
-   ========================================================================== */
+/* Strict Inline Date Controls Layout */
 .date-controls {
   display: flex;
   align-items: center;
@@ -371,20 +378,24 @@ svg.lucide, i[data-lucide] {
   font-weight: 600;
 }
 
-.date-controls select {
+/* Constrained Select Control Width */
+.date-controls select, select.form-select-sm {
   height: 32px;
-  padding: 0 8px;
+  width: auto;
+  max-width: 130px;
+  padding: 0 24px 0 8px;
   font-size: 0.8rem;
   border-radius: 6px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-card);
   color: var(--text-main);
+  outline: none;
 }
 
 .date-range-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 32px;
   padding: 0 8px;
   border-radius: 6px;
@@ -399,12 +410,13 @@ svg.lucide, i[data-lucide] {
   font-size: 0.775rem;
   color: var(--text-main);
   outline: none;
+  width: 110px;
 }
 
 .date-picker-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 32px;
   padding: 0 8px;
   border-radius: 6px;
@@ -420,6 +432,7 @@ svg.lucide, i[data-lucide] {
   font-size: 0.775rem;
   color: var(--text-main);
   outline: none;
+  width: 110px;
 }
 
 .date-picker-wrap .icon-inline {
@@ -439,6 +452,7 @@ svg.lucide, i[data-lucide] {
   border-radius: 16px;
   border: 1px solid var(--border-subtle);
   font-size: 0.775rem;
+  flex-shrink: 0;
 }
 
 .user-role-tag {
@@ -608,6 +622,7 @@ svg.lucide, i[data-lucide] {
     padding: 12px 16px;
     gap: 12px;
     height: auto;
+    max-height: none;
   }
 
   .top-bar-left,
