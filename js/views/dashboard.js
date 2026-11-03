@@ -6,6 +6,12 @@ export async function mount(container) {
   let unsubs = [];
   let eventListenersCleanup = [];
 
+  // Show date controls bar on top nav specifically for Dashboard
+  const topDateControls = document.getElementById('dashboard-date-controls');
+  if (topDateControls) {
+    topDateControls.style.display = 'flex';
+  }
+
   container.innerHTML = `
     <div class="kpi-grid">
       <div class="kpi-card">
@@ -316,6 +322,10 @@ export async function mount(container) {
   }
 
   return () => {
+    // Hide top-bar date controls when navigating away from dashboard
+    if (topDateControls) {
+      topDateControls.style.display = 'none';
+    }
     unsubs.forEach((unsub) => unsub && unsub());
     eventListenersCleanup.forEach((cleanup) => cleanup && cleanup());
   };
