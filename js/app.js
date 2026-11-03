@@ -85,7 +85,6 @@ function bindSidebarFlyoutMenu() {
   const sidebar = document.getElementById('main-sidebar');
   const mainContent = document.querySelector('.main-content');
 
-  // Set initial collapsed state so content is unimpeded
   if (sidebar) sidebar.classList.add('collapsed');
   if (mainContent) mainContent.classList.add('expanded');
 
@@ -136,7 +135,6 @@ function bindSidebarFlyoutMenu() {
     }
   }
 
-  // 1. Burger button click toggles side rail visibility
   if (toggleSidebarBtn && sidebar) {
     toggleSidebarBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -152,7 +150,6 @@ function bindSidebarFlyoutMenu() {
     });
   }
 
-  // 2. Category trigger button click toggles flyout menu
   triggers.forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -166,7 +163,6 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // 3. Accordion dropdown toggles inside flyouts
   const dropdownTriggers = document.querySelectorAll('[data-dropdown-trigger]');
   dropdownTriggers.forEach((trigger) => {
     trigger.addEventListener('click', (e) => {
@@ -188,7 +184,6 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // 4. Subnav item click -> Navigate & close menu
   const subnavItems = document.querySelectorAll('.subnav-item, .subnav-subitem');
   subnavItems.forEach((item) => {
     item.addEventListener('click', () => {
@@ -198,7 +193,6 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // 5. Direct icon clicks -> Collapse sidebar
   const directNavLinks = document.querySelectorAll('.sidebar-nav a.nav-icon-link');
   directNavLinks.forEach((link) => {
     link.addEventListener('click', () => {
@@ -208,7 +202,6 @@ function bindSidebarFlyoutMenu() {
     });
   });
 
-  // 6. Backdrop & outside click closes flyout
   if (backdrop) {
     backdrop.addEventListener('click', closeFlyout);
   }
@@ -328,7 +321,7 @@ function switchAuthView(viewId) {
       subtitle.textContent = 'Register a new backoffice administrator account';
       break;
     case 'form-otp':
-      subtitle.textContent = 'Enter the 6-digit code delivered to your inbox';
+      subtitle.textContent = 'Enter the 8-digit code delivered to your inbox';
       break;
     case 'form-forgot':
       subtitle.textContent = 'Reset your portal password via email OTP';
@@ -342,29 +335,20 @@ function switchAuthView(viewId) {
 }
 
 function bindAuthFormTransitions() {
-  document.getElementById('link-goto-register').onclick = (e) => {
-    e.preventDefault();
-    switchAuthView('form-register');
-  };
+  const regLink = document.getElementById('link-goto-register');
+  if (regLink) regLink.onclick = (e) => { e.preventDefault(); switchAuthView('form-register'); };
 
-  document.getElementById('link-goto-forgot').onclick = (e) => {
-    e.preventDefault();
-    switchAuthView('form-forgot');
-  };
+  const forgotLink = document.getElementById('link-goto-forgot');
+  if (forgotLink) forgotLink.onclick = (e) => { e.preventDefault(); switchAuthView('form-forgot'); };
 
-  document.getElementById('link-goto-login-1').onclick = (e) => {
-    e.preventDefault();
-    switchAuthView('form-login');
-  };
+  const login1 = document.getElementById('link-goto-login-1');
+  if (login1) login1.onclick = (e) => { e.preventDefault(); switchAuthView('form-login'); };
 
-  document.getElementById('link-goto-login-2').onclick = (e) => {
-    e.preventDefault();
-    switchAuthView('form-login');
-  };
+  const login2 = document.getElementById('link-goto-login-2');
+  if (login2) login2.onclick = (e) => { e.preventDefault(); switchAuthView('form-login'); };
 
-  document.getElementById('btn-cancel-otp').onclick = () => {
-    switchAuthView('form-login');
-  };
+  const cancelOtp = document.getElementById('btn-cancel-otp');
+  if (cancelOtp) cancelOtp.onclick = () => { switchAuthView('form-login'); };
 }
 
 // =========================================================================
@@ -372,135 +356,145 @@ function bindAuthFormTransitions() {
 // =========================================================================
 function bindAuthActions() {
   const formLogin = document.getElementById('form-login');
-  formLogin.onsubmit = async (e) => {
-    e.preventDefault();
-    const btn = formLogin.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    btn.textContent = 'Signing in...';
+  if (formLogin) {
+    formLogin.onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = formLogin.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Signing in...';
 
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
 
-    try {
-      await Auth.signIn(email, password);
-      DeviceTracker.startTracking();
-      showAuthOverlay(false);
+      try {
+        await Auth.signIn(email, password);
+        DeviceTracker.startTracking();
+        showAuthOverlay(false);
 
-      const activeShopId = globalState.activeShopId || globalState.profile?.shop_id;
-      if (activeShopId) {
-        setupGlobalRealtime(activeShopId);
+        const activeShopId = globalState.activeShopId || globalState.profile?.shop_id;
+        if (activeShopId) {
+          setupGlobalRealtime(activeShopId);
+        }
+
+        Toast.success('Signed in successfully.');
+        navigate();
+      } catch (err) {
+        Toast.error(err.message || 'Login failed. Verify credentials.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
       }
-
-      Toast.success('Signed in successfully.');
-      navigate();
-    } catch (err) {
-      Toast.error(err.message || 'Login failed. Verify credentials.');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Sign In';
-    }
-  };
+    };
+  }
 
   const formRegister = document.getElementById('form-register');
-  formRegister.onsubmit = async (e) => {
-    e.preventDefault();
-    const btn = formRegister.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    btn.textContent = 'Dispatching code...';
+  if (formRegister) {
+    formRegister.onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = formRegister.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Dispatching code...';
 
-    const name = document.getElementById('reg-fullname').value.trim();
-    const businessName = document.getElementById('reg-business-name').value.trim();
-    const businessType = document.getElementById('reg-business-type').value;
-    const phone = document.getElementById('reg-phone').value.trim();
-    const country = document.getElementById('reg-country').value;
-    const email = document.getElementById('reg-email').value.trim();
-    const password = document.getElementById('reg-password').value;
+      const name = document.getElementById('reg-fullname').value.trim();
+      const businessName = document.getElementById('reg-business-name').value.trim();
+      const businessType = document.getElementById('reg-business-type').value;
+      const phone = document.getElementById('reg-phone').value.trim();
+      const country = document.getElementById('reg-country').value;
+      const email = document.getElementById('reg-email').value.trim();
+      const password = document.getElementById('reg-password').value;
 
-    try {
-      await Auth.signUp(email, password, name, businessName, businessType, phone, country);
-      pendingAuthEmail = email;
-      document.getElementById('otp-target-email').textContent = email;
-      Toast.success('Verification code dispatched to your inbox.');
-      switchAuthView('form-otp');
-    } catch (err) {
-      Toast.error(err.message || 'Registration failed.');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Register Store & Send OTP';
-    }
-  };
+      try {
+        await Auth.signUp(email, password, name, businessName, businessType, phone, country);
+        pendingAuthEmail = email;
+        document.getElementById('otp-target-email').textContent = email;
+        Toast.success('Verification code dispatched to your inbox.');
+        switchAuthView('form-otp');
+      } catch (err) {
+        Toast.error(err.message || 'Registration failed.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Register Store & Send OTP';
+      }
+    };
+  }
 
   const formOtp = document.getElementById('form-otp');
-  formOtp.onsubmit = async (e) => {
-    e.preventDefault();
-    const btn = formOtp.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    btn.textContent = 'Verifying token...';
+  if (formOtp) {
+    formOtp.onsubmit = async (e) => {
+      e.preventDefault();
+      const btn = formOtp.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Verifying token...';
 
-    const token = document.getElementById('otp-code').value.trim();
+      const token = document.getElementById('otp-code').value.trim();
 
-    try {
-      await Auth.verifySignUpOTP(pendingAuthEmail, token);
-      DeviceTracker.startTracking();
-      showAuthOverlay(false);
+      try {
+        await Auth.verifySignUpOTP(pendingAuthEmail, token);
+        DeviceTracker.startTracking();
+        showAuthOverlay(false);
 
-      const activeShopId = globalState.activeShopId || globalState.profile?.shop_id;
-      if (activeShopId) {
-        setupGlobalRealtime(activeShopId);
+        const activeShopId = globalState.activeShopId || globalState.profile?.shop_id;
+        if (activeShopId) {
+          setupGlobalRealtime(activeShopId);
+        }
+
+        Toast.success('Account successfully verified.');
+        navigate();
+      } catch (err) {
+        Toast.error(err.message || 'Invalid or expired OTP token.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Verify Code';
       }
-
-      Toast.success('Account successfully verified.');
-      navigate();
-    } catch (err) {
-      Toast.error(err.message || 'Invalid or expired OTP token.');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Verify Code';
-    }
-  };
+    };
+  }
 
   const formForgot = document.getElementById('form-forgot');
-  formForgot.onsubmit = async (e) => {
-    e.preventDefault();
-    const email = document.getElementById('forgot-email').value.trim();
-    const btn = formForgot.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    btn.textContent = 'Requesting token...';
+  if (formForgot) {
+    formForgot.onsubmit = async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('forgot-email').value.trim();
+      const btn = formForgot.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Requesting token...';
 
-    try {
-      await Auth.requestPasswordReset(email);
-      pendingAuthEmail = email;
-      Toast.success('Reset code sent to email.');
-      switchAuthView('form-reset-password');
-    } catch (err) {
-      Toast.error(err.message);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Send Reset Code';
-    }
-  };
+      try {
+        await Auth.requestPasswordReset(email);
+        pendingAuthEmail = email;
+        Toast.success('Reset code sent to email.');
+        switchAuthView('form-reset-password');
+      } catch (err) {
+        Toast.error(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send Reset Code';
+      }
+    };
+  }
 
   const formResetPass = document.getElementById('form-reset-password');
-  formResetPass.onsubmit = async (e) => {
-    e.preventDefault();
-    const token = document.getElementById('reset-otp').value.trim();
-    const newPassword = document.getElementById('reset-new-password').value;
-    const btn = formResetPass.querySelector('button[type="submit"]');
-    btn.disabled = true;
-    btn.textContent = 'Updating credentials...';
+  if (formResetPass) {
+    formResetPass.onsubmit = async (e) => {
+      e.preventDefault();
+      const token = document.getElementById('reset-otp').value.trim();
+      const newPassword = document.getElementById('reset-new-password').value;
+      const btn = formResetPass.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      btn.textContent = 'Updating credentials...';
 
-    try {
-      await Auth.verifyPasswordResetOTP(pendingAuthEmail, token);
-      await Auth.updatePassword(newPassword);
-      Toast.success('Password updated. Please log in.');
-      switchAuthView('form-login');
-    } catch (err) {
-      Toast.error(err.message || 'Password reset failed.');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Set New Password';
-    }
-  };
+      try {
+        await Auth.verifyPasswordResetOTP(pendingAuthEmail, token);
+        await Auth.updatePassword(newPassword);
+        Toast.success('Password updated. Please log in.');
+        switchAuthView('form-login');
+      } catch (err) {
+        Toast.error(err.message || 'Password reset failed.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Set New Password';
+      }
+    };
+  }
 }
 
 // =========================================================================
@@ -512,64 +506,92 @@ function bindProfileDrawer() {
   const closeBtn = document.getElementById('btn-close-profile');
   const form = document.getElementById('form-profile-update');
 
+  if (!drawer || !openBtn) return;
+
   openBtn.onclick = () => {
-    document.getElementById('profile-email').value = globalState.user?.email || '';
-    document.getElementById('profile-fullname').value = globalState.profile?.full_name || '';
-    document.getElementById('profile-currency').value = globalState.preferences.currency;
-    document.getElementById('profile-timezone').value = globalState.preferences.timezone;
-    document.getElementById('profile-date-format').value = globalState.preferences.dateFormat;
-    document.getElementById('profile-time-format').value = globalState.preferences.timeFormat;
-    document.getElementById('profile-language').value = globalState.preferences.language;
-    
+    const emailEl = document.getElementById('profile-email');
+    const nameEl = document.getElementById('profile-fullname');
+    const currencyEl = document.getElementById('profile-currency');
+    const countryEl = document.getElementById('profile-country');
+    const phoneCodeEl = document.getElementById('profile-phone-code');
+    const timezoneEl = document.getElementById('profile-timezone');
+
+    if (emailEl) emailEl.value = globalState.user?.email || '';
+    if (nameEl) nameEl.value = globalState.profile?.full_name || '';
+    if (currencyEl) currencyEl.value = globalState.preferences?.currency || 'KES';
+    if (countryEl) countryEl.value = globalState.profile?.country || 'Kenya';
+    if (phoneCodeEl) phoneCodeEl.value = globalState.profile?.phone_code || '+254';
+    if (timezoneEl) timezoneEl.value = globalState.preferences?.timezone || 'Africa/Nairobi';
+
     drawer.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons({ root: drawer });
   };
 
-  closeBtn.onclick = () => drawer.classList.add('hidden');
+  if (closeBtn) {
+    closeBtn.onclick = () => drawer.classList.add('hidden');
+  }
 
-  form.onsubmit = async (e) => {
-    e.preventDefault();
-    const fullName = document.getElementById('profile-fullname').value.trim();
-    const newPassword = document.getElementById('profile-new-password').value;
+  if (form) {
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const fullName = document.getElementById('profile-fullname')?.value.trim() || '';
+      const country = document.getElementById('profile-country')?.value || 'Kenya';
+      const phoneCode = document.getElementById('profile-phone-code')?.value.trim() || '+254';
+      const currency = document.getElementById('profile-currency')?.value || 'KES';
+      const timezone = document.getElementById('profile-timezone')?.value || 'Africa/Nairobi';
+      const newPassword = document.getElementById('profile-new-password')?.value;
 
-    const newPreferences = {
-      currency: document.getElementById('profile-currency').value,
-      timezone: document.getElementById('profile-timezone').value,
-      dateFormat: document.getElementById('profile-date-format').value,
-      timeFormat: document.getElementById('profile-time-format').value,
-      language: document.getElementById('profile-language').value,
-    };
+      const newPreferences = {
+        currency,
+        timezone,
+      };
 
-    globalState.updatePreferences(newPreferences);
+      globalState.updatePreferences(newPreferences);
 
-    if (globalState.user?.id) {
-      await supabase
-        .from('profiles')
-        .update({ full_name: fullName, updated_at: new Date().toISOString() })
-        .eq('id', globalState.user.id);
-      if (globalState.profile) globalState.profile.full_name = fullName;
-    }
+      if (globalState.user?.id) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            full_name: fullName,
+            country: country,
+            phone_code: phoneCode,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', globalState.user.id);
 
-    if (newPassword && newPassword.length >= 6) {
-      try {
-        await Auth.updatePassword(newPassword);
-        Toast.success('Password updated successfully.');
-      } catch (err) {
-        Toast.error(err.message);
+        if (error) {
+          Toast.error(error.message);
+          return;
+        }
+
+        if (globalState.profile) {
+          globalState.profile.full_name = fullName;
+          globalState.profile.country = country;
+          globalState.profile.phone_code = phoneCode;
+        }
       }
-    }
 
-    Toast.success('Profile preferences saved.');
-    drawer.classList.add('hidden');
-    navigate();
-  };
+      if (newPassword && newPassword.length >= 8) {
+        try {
+          await Auth.updatePassword(newPassword);
+          Toast.success('Password updated successfully.');
+        } catch (err) {
+          Toast.error(err.message);
+        }
+      }
+
+      Toast.success('Profile preferences saved.');
+      drawer.classList.add('hidden');
+      navigate();
+    };
+  }
 }
 
 function bindDateFilters() {
   const chips = document.querySelectorAll('.date-chip[data-period]');
   const calInput = document.getElementById('stats-calendar-filter');
 
-  if (calInput) calInput.value = globalState.filterDate;
+  if (calInput && globalState.filterDate) calInput.value = globalState.filterDate;
 
   chips.forEach((chip) => {
     chip.onclick = () => {
