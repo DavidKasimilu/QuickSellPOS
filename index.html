@@ -377,42 +377,44 @@
     <div class="main-content">
       
       <!-- Top Action Bar -->
-      <header class="top-bar">
-        <div class="top-bar-left">
+      <header class="top-bar" style="display:flex; justify-content:space-between; align-items:center; padding:12px 24px; min-height:64px; flex-wrap:wrap; gap:12px; background:var(--bg-surface); border-bottom:1px solid var(--border-subtle);">
+        <div class="top-bar-left" style="display:flex; align-items:center; gap:12px;">
           <button class="btn-icon mobile-nav-toggle" id="btn-toggle-sidebar" title="Toggle Navigation">
             <i data-lucide="menu"></i>
           </button>
-          <h2 id="current-view-title">Dashboard</h2>
+          <h2 id="current-view-title" style="margin:0; font-size:1.25rem; font-weight:600;">Dashboard</h2>
           <span class="badge badge-teal" id="badge-active-shop">Main Store</span>
         </div>
 
-        <div class="top-bar-right">
-          <!-- Date Filter Controls: Strictly visible on Dashboard only -->
-          <div class="date-controls" id="dashboard-date-controls">
-            <button class="date-chip active" data-period="today">Today</button>
-            <button class="date-chip" data-period="yesterday">Yesterday</button>
+        <div class="top-bar-right" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <!-- Inline Filter Controls Bar (Visible only on Dashboard view) -->
+          <div class="date-controls" id="dashboard-date-controls" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div style="display:inline-flex; gap:4px;">
+              <button class="date-chip active" data-period="today">Today</button>
+              <button class="date-chip" data-period="yesterday">Yesterday</button>
+            </div>
             
-            <select id="month-filter-select" class="form-select-sm">
+            <select id="month-filter-select" class="form-select-sm" style="height:32px; font-size:0.85rem; padding:0 8px;">
               <option value="">Month select...</option>
               <option value="this-month">This Month</option>
               <option value="last-month">Last Month</option>
             </select>
 
-            <div class="date-range-wrap" style="display:flex; gap:6px; align-items:center;">
-              <input type="date" id="stats-start-date" class="input-sm" title="Start Date" />
-              <span>to</span>
-              <input type="date" id="stats-end-date" class="input-sm" title="End Date" />
+            <div class="date-range-wrap" style="display:inline-flex; gap:6px; align-items:center; background:var(--bg-app); border:1px solid var(--border-subtle); padding:2px 8px; border-radius:4px;">
+              <input type="date" id="stats-start-date" class="input-sm" style="border:none; background:transparent; font-size:0.8rem;" title="Start Date" />
+              <span style="font-size:0.75rem; color:var(--text-muted);">to</span>
+              <input type="date" id="stats-end-date" class="input-sm" style="border:none; background:transparent; font-size:0.8rem;" title="End Date" />
             </div>
             
-            <div class="date-picker-wrap">
-              <i data-lucide="calendar" class="icon-inline"></i>
-              <input type="date" id="stats-calendar-filter" title="Calendar Select" />
+            <div class="date-picker-wrap" style="display:inline-flex; align-items:center; gap:4px; background:var(--bg-app); border:1px solid var(--border-subtle); padding:2px 8px; border-radius:4px;">
+              <i data-lucide="calendar" class="icon-inline" style="width:14px; height:14px; color:var(--text-muted);"></i>
+              <input type="date" id="stats-calendar-filter" style="border:none; background:transparent; font-size:0.8rem;" title="Calendar Select" />
             </div>
           </div>
           
-          <div class="profile-summary" id="top-user-pill">
-            <span class="user-role-tag" id="user-role-label">ADMIN</span>
-            <span class="user-email-tag" id="user-email-label">...</span>
+          <div class="profile-summary" id="top-user-pill" style="display:inline-flex; align-items:center; gap:6px; background:var(--bg-app); padding:4px 8px; border-radius:16px; border:1px solid var(--border-subtle);">
+            <span class="user-role-tag" id="user-role-label" style="font-size:0.7rem; font-weight:700; background:var(--teal-600); color:#fff; padding:2px 6px; border-radius:10px;">ADMIN</span>
+            <span class="user-email-tag" id="user-email-label" style="font-size:0.8rem; color:var(--text-muted);">...</span>
           </div>
         </div>
       </header>
