@@ -72,8 +72,11 @@ export async function mount(container) {
       data: staffMembers || [],
       onAction: (action, id) => {
         const item = staffMembers.find((s) => s.id === id);
-        if (action === 'edit' && item) openStaffModal(item);
-        else if (action === 'delete' && item) confirmSoftDeleteStaff(item);
+        if (action === 'edit' && item) {
+          openStaffModal(item);
+        } else if (action === 'delete' && item) {
+          confirmSoftDeleteStaff(item);
+        }
       },
     });
 
@@ -87,49 +90,53 @@ export async function mount(container) {
     Modal.open({
       title: isEdit ? `Edit Personnel: ${staff.full_name}` : 'Register New Staff Member',
       content: `
-        <form id="form-staff-save" style="display:flex; flex-direction:column; gap:12px;">
-          <div class="form-group">
-            <label>Full Name</label>
-            <input type="text" name="full_name" required value="${staff?.full_name || ''}" placeholder="e.g. Jane Doe" />
-          </div>
-
-          <div class="form-row" style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;">
-              <label>Job Designation / Role</label>
-              <input type="text" name="job_title" value="${staff?.job_title || ''}" placeholder="e.g. Sales Associate / Inventory Specialist" />
+        <div style="max-height: calc(85vh - 120px); overflow-y: auto; padding-right: 4px;">
+          <form id="form-staff-save" style="display:flex; flex-direction:column; gap:12px;">
+            <div class="form-group">
+              <label>Full Name</label>
+              <input type="text" name="full_name" required value="${staff?.full_name || ''}" placeholder="e.g. Jane Doe" />
             </div>
-            <div class="form-group" style="flex:1;">
-              <label>Department</label>
-              <select name="department">
-                <option value="Sales" ${staff?.department === 'Sales' ? 'selected' : ''}>Sales & Checkout</option>
-                <option value="Inventory" ${staff?.department === 'Inventory' ? 'selected' : ''}>Inventory & Warehouse</option>
-                <option value="Management" ${staff?.department === 'Management' ? 'selected' : ''}>Management</option>
-                <option value="Accounts" ${staff?.department === 'Accounts' ? 'selected' : ''}>Accounts & Finance</option>
-                <option value="General" ${!staff?.department || staff?.department === 'General' ? 'selected' : ''}>General Staff</option>
-              </select>
-            </div>
-          </div>
 
-          <div class="form-row" style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;">
-              <label>Phone Contact</label>
-              <input type="text" name="phone" value="${staff?.phone || ''}" placeholder="+254 7..." />
+            <div class="form-row" style="display:flex; gap:12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Job Designation / Role</label>
+                <input type="text" name="job_title" value="${staff?.job_title || ''}" placeholder="e.g. Sales Associate / Inventory Specialist" />
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Department</label>
+                <select name="department">
+                  <option value="Sales" ${staff?.department === 'Sales' ? 'selected' : ''}>Sales & Checkout</option>
+                  <option value="Inventory" ${staff?.department === 'Inventory' ? 'selected' : ''}>Inventory & Warehouse</option>
+                  <option value="Management" ${staff?.department === 'Management' ? 'selected' : ''}>Management</option>
+                  <option value="Accounts" ${staff?.department === 'Accounts' ? 'selected' : ''}>Accounts & Finance</option>
+                  <option value="General" ${!staff?.department || staff?.department === 'General' ? 'selected' : ''}>General Staff</option>
+                </select>
+              </div>
             </div>
-            <div class="form-group" style="flex:1;">
-              <label>Email Address</label>
-              <input type="email" name="email" value="${staff?.email || ''}" placeholder="staff@store.com" />
+
+            <div class="form-row" style="display:flex; gap:12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Phone Contact</label>
+                <input type="text" name="phone" value="${staff?.phone || ''}" placeholder="+254 7..." />
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Email Address</label>
+                <input type="email" name="email" value="${staff?.email || ''}" placeholder="staff@store.com" />
+              </div>
             </div>
-          </div>
 
-          <div class="form-group">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-              <input type="checkbox" name="is_active" ${staff?.is_active !== false ? 'checked' : ''} />
-              Active employee status
-            </label>
-          </div>
+            <div class="form-group">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" name="is_active" ${staff?.is_active !== false ? 'checked' : ''} />
+                Active employee status
+              </label>
+            </div>
 
-          <button type="submit" class="btn btn-teal-primary btn-block">${isEdit ? 'Update Personnel' : 'Save Staff Member'}</button>
-        </form>
+            <button type="submit" class="btn btn-teal-primary btn-block" style="margin-top:8px;">
+              ${isEdit ? 'Update Personnel' : 'Save Staff Member'}
+            </button>
+          </form>
+        </div>
       `,
       onSubmit: async (fd) => {
         const payload = {
@@ -144,21 +151,28 @@ export async function mount(container) {
         };
 
         if (isEdit) {
-          const { error } = await supabase.from('store_staff').update(payload).eq('id', staff.id);
+          const { error } = await supabase
+            .from('store_staff')
+            .update(payload)
+            .eq('id', staff.id);
+
           if (error) {
             Toast.error(error.message);
             return;
           }
         } else {
           payload.created_at = new Date().toISOString();
-          const { error } = await supabase.from('store_staff').insert([payload]);
+          const { error } = await supabase
+            .from('store_staff')
+            .insert([payload]);
+
           if (error) {
             Toast.error(error.message);
             return;
           }
         }
 
-        Toast.success('Staff record saved.');
+        Toast.success(isEdit ? 'Staff record updated successfully.' : 'New staff member saved.');
         await loadStaffDirectory();
       },
     });
