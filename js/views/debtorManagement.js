@@ -207,15 +207,20 @@ export async function mount(container) {
         const payAmount = parseFloat(fd.amount_paid) || 0;
         const nowIso = new Date().toISOString();
 
+        const settlementNo = `SET-${Date.now().toString().slice(-8)}`;
+
         // 1. Insert settlement log
         const { error: settErr } = await supabase.from('debtor_settlements').insert([{
+          settlement_no: settlementNo,
           shop_id: globalState.activeShopId,
           customer_id: fd.customer_id,
+          amount: payAmount,
           amount_paid: payAmount,
           payment_method: fd.payment_method,
           reference_no: fd.reference_no || null,
           notes: fd.notes || null,
-          created_by: globalState.user?.id,
+          received_by: globalState.user?.id || null,
+          created_by: globalState.user?.id || null,
           created_at: nowIso,
         }]);
 

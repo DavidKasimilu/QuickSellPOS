@@ -179,13 +179,13 @@ export async function mount(container) {
   async function confirmSoftDeleteCustomer(customer) {
     if (!confirm(`Are you sure you want to delete customer "${customer.name}"?`)) return;
 
-    const user = (await supabase.auth.getUser())?.data?.user;
+    const userId = globalState.user?.id || (await supabase.auth.getUser())?.data?.user?.id || null;
 
     const { error } = await supabase
       .from('customers')
       .update({
         deleted_at: new Date().toISOString(),
-        deleted_by: user?.id || null,
+        deleted_by: userId,
       })
       .eq('id', customer.id);
 

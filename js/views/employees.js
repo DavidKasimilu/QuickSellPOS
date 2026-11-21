@@ -335,10 +335,20 @@ export async function mount(container) {
           }
           Toast.success('Employee details updated.');
         } else {
-          // Generate a UUID for new staff profile record
-          const newId = crypto.randomUUID ? crypto.randomUUID() : undefined;
-          const insertPayload = newId ? { id: newId, ...payload } : payload;
-          const { error } = await supabase.from('profiles').insert([insertPayload]);
+          // Check duplicate email before insert to provide a clear message
+          const { data: existing } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', payload.email)
+            .maybeSingle();
+
+          if (existing) {
+            Toast.error(`An employee with email "${payload.email}" already exists.`);
+            return;
+          }
+
+          // Let Postgres DEFAULT uuid_generate_v4() assign the UUID cleanly
+          const { error } = await supabase.from('profiles').insert([payload]);
           if (error) {
             Toast.error(error.message);
             return;
