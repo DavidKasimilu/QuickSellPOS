@@ -10,10 +10,13 @@ export async function mount(container) {
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div>
+        <span style="font-size:0.8125rem; color:var(--text-muted);">Manage staff accounts, roles, POS PINs, and commissions</span>
+      </div>
       <div id="employees-action-container"></div>
     </div>
 
-    <!-- Group 6 Submenu Navigation Tabs -->
+    <!-- Submenu Navigation Tabs -->
     <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto;">
       <button class="date-chip active" data-emp-tab="employees">Employees</button>
       <button class="date-chip" data-emp-tab="access-rights">Access Rights</button>
@@ -46,14 +49,19 @@ export async function mount(container) {
 
     switch (activeTab) {
       case 'employees':
-        actionArea.innerHTML = ``;
+        actionArea.innerHTML = `
+          <button class="btn btn-teal-primary" id="btn-add-employee">
+            <i data-lucide="user-plus" style="width:16px; height:16px;"></i> Add Employee
+          </button>
+        `;
+        document.getElementById('btn-add-employee').onclick = () => openEmployeeModal(null);
         await renderEmployeesTable(tableArea);
         break;
 
       case 'access-rights':
         actionArea.innerHTML = `
           <button class="btn btn-teal-primary" id="btn-sync-roles">
-            <i data-lucide="shield" style="width:16px; height:16px; margin-right:6px;"></i> Configure Matrix
+            <i data-lucide="shield" style="width:16px; height:16px;"></i> Configure Matrix
           </button>
         `;
         document.getElementById('btn-sync-roles').onclick = () => openRoleMatrixModal();
@@ -63,7 +71,7 @@ export async function mount(container) {
       case 'other-staff':
         actionArea.innerHTML = `
           <button class="btn btn-teal-primary" id="btn-add-aux">
-            <i data-lucide="user-plus" style="width:16px; height:16px; margin-right:6px;"></i> Add Auxiliary Staff
+            <i data-lucide="user-plus" style="width:16px; height:16px;"></i> Add Auxiliary Staff
           </button>
         `;
         document.getElementById('btn-add-aux').onclick = () => openAuxiliaryStaffModal();
@@ -85,10 +93,10 @@ export async function mount(container) {
   }
 
   // =========================================================================
-  // 1. Employees Tab
+  // 1. Employees Tab (Add, Edit, Delete)
   // =========================================================================
   async function renderEmployeesTable(target) {
-    let query = supabase.from('profiles').select('*, shops(name)').order('role');
+    let query = supabase.from('profiles').select('*, shops(name)').order('full_name');
     if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
 
     const { data: staff, error } = await query;
@@ -97,24 +105,248 @@ export async function mount(container) {
       return;
     }
 
-    renderDataTable({
-      targetId: 'emp-table-content',
-      columns: [
-        { label: 'Employee Name', key: 'full_name', render: (val, row) => `<strong>${val || row.email}</strong>` },
-        { label: 'Login Email', key: 'email' },
-        { 
-          label: 'Role', 
-          key: 'role', 
-          render: (r) => `<span class="badge ${r === 'admin' ? 'badge-teal' : ''}">${(r || 'staff').toUpperCase()}</span>` 
-        },
-        { label: 'Assigned Shop', key: 'shops', render: (s) => s?.name || 'All Locations' },
-        { label: 'Commission Rate', key: 'commission_rate', render: (c) => `${c || 0}%` },
-        { label: 'Status', key: 'is_active', render: (act) => act ? 'Active' : 'Suspended' },
-      ],
-      data: staff || [],
-      onAction: (action, id) => {
-        const member = staff.find((m) => m.id === id);
+    if (!staff || staff.length === 0) {
+      target.innerHTML = `
+        <div style="padding: 48px 24px; text-align: center; color: var(--text-subtle);">
+          <p style="font-size: 0.9rem; margin-bottom: 8px;">No employees registered for this store yet.</p>
+          <button class="btn btn-teal-primary btn-sm" id="btn-empty-add-emp">+ Add First Employee</button>
+        </div>
+      `;
+      const emptyBtn = target.querySelector('#btn-empty-add-emp');
+      if (emptyBtn) emptyBtn.onclick = () => openEmployeeModal(null);
+      return;
+    }
+
+    target.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Employee Name</th>
+            <th>Email / Phone</th>
+            <th>Role</th>
+            <th>Assigned Shop</th>
+            <th>POS PIN</th>
+            <th>Commission</th>
+            <th>Status</th>
+            <th style="text-align:right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${staff
+            .map((member) => {
+              const isSelf = member.id === globalState.user?.id;
+              return `
+                <tr>
+                  <td>
+                    <strong>${member.full_name || 'Unnamed Staff'}</strong>
+                    ${isSelf ? '<span class="badge badge-teal" style="margin-left:6px;">YOU</span>' : ''}
+                  </td>
+                  <td>
+                    <div>${member.email || '-'}</div>
+                    ${member.phone ? `<div style="font-size:0.75rem; color:var(--text-muted);">${member.phone}</div>` : ''}
+                  </td>
+                  <td>
+                    <span class="badge ${member.role === 'admin' ? 'badge-teal' : ''}">${(member.role || 'staff').toUpperCase()}</span>
+                  </td>
+                  <td>${member.shops?.name || 'All Locations'}</td>
+                  <td><code>${member.pos_pin ? '••••' : 'Not set'}</code></td>
+                  <td>${member.commission_rate || 0}%</td>
+                  <td>
+                    ${
+                      member.is_active !== false
+                        ? '<span class="badge badge-teal">Active</span>'
+                        : '<span class="badge" style="background:#fee2e2; color:#ef4444;">Suspended</span>'
+                    }
+                  </td>
+                  <td style="text-align:right; white-space:nowrap;">
+                    <button class="btn btn-outline btn-sm" data-emp-edit="${member.id}" style="margin-right:6px;">
+                      Edit
+                    </button>
+                    <button class="btn btn-outline btn-sm text-danger" data-emp-delete="${member.id}" ${isSelf ? 'disabled title="Cannot delete your own account"' : ''}>
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              `;
+            })
+            .join('')}
+        </tbody>
+      </table>
+    `;
+
+    target.querySelectorAll('[data-emp-edit]').forEach((btn) => {
+      btn.onclick = () => {
+        const member = staff.find((m) => m.id === btn.dataset.empEdit);
         if (member) openEmployeeModal(member);
+      };
+    });
+
+    target.querySelectorAll('[data-emp-delete]').forEach((btn) => {
+      btn.onclick = () => {
+        const member = staff.find((m) => m.id === btn.dataset.empDelete);
+        if (member) confirmDeleteEmployee(member);
+      };
+    });
+  }
+
+  // Delete Employee Workflow
+  function confirmDeleteEmployee(member) {
+    if (member.id === globalState.user?.id) {
+      Toast.error('You cannot delete your currently signed-in administrator profile.');
+      return;
+    }
+
+    Modal.open({
+      title: 'Delete Employee Account',
+      content: `
+        <form id="form-employee-delete">
+          <p style="font-size:0.875rem; color:var(--text-main); margin-bottom:12px;">
+            Are you sure you want to remove <strong>${member.full_name || member.email}</strong> from your store team?
+          </p>
+          <p style="font-size:0.8rem; color:var(--text-muted); background:var(--color-danger-bg); border:1px solid #fecaca; padding:10px 12px; border-radius:6px; margin-bottom:18px;">
+            This will revoke their POS and Backoffice access immediately. Past sales receipts recorded under this employee will remain intact for audit accuracy.
+          </p>
+          <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button type="button" class="btn btn-outline" id="btn-cancel-emp-del">Cancel</button>
+            <button type="submit" class="btn" style="background:var(--color-danger); color:#fff;">Delete Employee</button>
+          </div>
+        </form>
+      `,
+      onSubmit: async () => {
+        const { error } = await supabase.from('profiles').delete().eq('id', member.id);
+        if (error) {
+          // Fallback to soft-deactivation if foreign key constraints prevent hard delete
+          if (error.code === '23503') {
+            const { error: softErr } = await supabase
+              .from('profiles')
+              .update({ is_active: false, shop_id: null, updated_at: new Date().toISOString() })
+              .eq('id', member.id);
+            if (softErr) {
+              Toast.error(softErr.message);
+              return;
+            }
+            Toast.info('Employee had historical records; account deactivated & unassigned from shop.');
+          } else {
+            Toast.error(error.message);
+            return;
+          }
+        } else {
+          Toast.success(`Employee "${member.full_name || member.email}" deleted.`);
+        }
+        await loadActiveTab();
+      },
+    });
+
+    setTimeout(() => {
+      const cancelBtn = document.getElementById('btn-cancel-emp-del');
+      if (cancelBtn) cancelBtn.onclick = () => Modal.close();
+    }, 30);
+  }
+
+  // Add / Edit Employee Modal
+  async function openEmployeeModal(member = null) {
+    const isEdit = !!member;
+    const { data: shops } = await supabase.from('shops').select('id, name');
+    const defaultShopId = isEdit ? member.shop_id : globalState.activeShopId;
+
+    const shopOpts =
+      `<option value="">-- All Locations / Global --</option>` +
+      (shops || [])
+        .map((s) => `<option value="${s.id}" ${defaultShopId === s.id ? 'selected' : ''}>${s.name}</option>`)
+        .join('');
+
+    Modal.open({
+      title: isEdit ? `Edit Employee: ${member.full_name || member.email}` : 'Add New Employee',
+      content: `
+        <form id="form-employee-save">
+          <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" name="full_name" required value="${member?.full_name || ''}" placeholder="e.g. Jane Wanjiku" />
+          </div>
+
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:1;">
+              <label>Email Address</label>
+              <input type="email" name="email" required value="${member?.email || ''}" placeholder="cashier@store.com" />
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Phone Number</label>
+              <input type="text" name="phone" value="${member?.phone || ''}" placeholder="+254 7..." />
+            </div>
+          </div>
+
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:1;">
+              <label>Assigned System Role</label>
+              <select name="role">
+                <option value="cashier" ${member?.role === 'cashier' ? 'selected' : ''}>Cashier</option>
+                <option value="staff" ${member?.role === 'staff' ? 'selected' : ''}>Staff</option>
+                <option value="manager" ${member?.role === 'manager' ? 'selected' : ''}>Manager</option>
+                <option value="admin" ${member?.role === 'admin' ? 'selected' : ''}>Admin</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>POS Quick-Login PIN (4 Digits)</label>
+              <input type="text" name="pos_pin" maxlength="6" pattern="[0-9]{4,6}" inputmode="numeric" value="${member?.pos_pin || ''}" placeholder="e.g. 1234" />
+            </div>
+          </div>
+
+          <div class="form-row" style="display:flex; gap:12px;">
+            <div class="form-group" style="flex:1;">
+              <label>Assigned Store Branch</label>
+              <select name="shop_id">${shopOpts}</select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label>Sales Commission Rate (%)</label>
+              <input type="number" step="0.1" min="0" max="100" name="commission_rate" value="${member?.commission_rate ?? 0}" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:normal;">
+              <input type="checkbox" name="is_active" ${member?.is_active !== false ? 'checked' : ''} />
+              Account Active (Can sign in to POS & Backoffice)
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-teal-primary btn-block">
+            ${isEdit ? 'Save Employee Changes' : 'Create Employee'}
+          </button>
+        </form>
+      `,
+      onSubmit: async (formData) => {
+        const payload = {
+          full_name: formData.full_name.trim(),
+          email: formData.email.trim().toLowerCase(),
+          phone: formData.phone?.trim() || null,
+          role: formData.role,
+          pos_pin: formData.pos_pin?.trim() || null,
+          shop_id: formData.shop_id || null,
+          commission_rate: parseFloat(formData.commission_rate) || 0,
+          is_active: formData.is_active === 'on',
+          updated_at: new Date().toISOString(),
+        };
+
+        if (isEdit) {
+          const { error } = await supabase.from('profiles').update(payload).eq('id', member.id);
+          if (error) {
+            Toast.error(error.message);
+            return;
+          }
+          Toast.success('Employee details updated.');
+        } else {
+          // Generate a UUID for new staff profile record
+          const newId = crypto.randomUUID ? crypto.randomUUID() : undefined;
+          const insertPayload = newId ? { id: newId, ...payload } : payload;
+          const { error } = await supabase.from('profiles').insert([insertPayload]);
+          if (error) {
+            Toast.error(error.message);
+            return;
+          }
+          Toast.success(`Employee "${payload.full_name}" added.`);
+        }
+
+        await loadActiveTab();
       },
     });
   }
@@ -132,21 +364,23 @@ export async function mount(container) {
       return;
     }
 
-    const rolesList = data?.length ? data : [
-      { id: '1', role: 'admin', can_void_receipts: true, can_apply_manual_discounts: true, can_view_cost_prices: true, can_adjust_inventory: true },
-      { id: '2', role: 'manager', can_void_receipts: true, can_apply_manual_discounts: true, can_view_cost_prices: true, can_adjust_inventory: true },
-      { id: '3', role: 'cashier', can_void_receipts: false, can_apply_manual_discounts: false, can_view_cost_prices: false, can_adjust_inventory: false },
-      { id: '4', role: 'staff', can_void_receipts: false, can_apply_manual_discounts: false, can_view_cost_prices: false, can_adjust_inventory: false },
-    ];
+    const rolesList = data?.length
+      ? data
+      : [
+          { id: '1', role: 'admin', can_void_receipts: true, can_apply_manual_discounts: true, can_view_cost_prices: true, can_adjust_inventory: true },
+          { id: '2', role: 'manager', can_void_receipts: true, can_apply_manual_discounts: true, can_view_cost_prices: true, can_adjust_inventory: true },
+          { id: '3', role: 'cashier', can_void_receipts: false, can_apply_manual_discounts: false, can_view_cost_prices: false, can_adjust_inventory: false },
+          { id: '4', role: 'staff', can_void_receipts: false, can_apply_manual_discounts: false, can_view_cost_prices: false, can_adjust_inventory: false },
+        ];
 
     renderDataTable({
       targetId: 'emp-table-content',
       columns: [
         { label: 'Role Tier', key: 'role', render: (r) => `<strong>${(r || '').toUpperCase()}</strong>` },
-        { label: 'Void Receipts', key: 'can_void_receipts', render: (v) => v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked' },
-        { label: 'Manual Discounts', key: 'can_apply_manual_discounts', render: (v) => v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked' },
-        { label: 'View COGS / Costs', key: 'can_view_cost_prices', render: (v) => v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked' },
-        { label: 'Adjust Inventory', key: 'can_adjust_inventory', render: (v) => v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked' },
+        { label: 'Void Receipts', key: 'can_void_receipts', render: (v) => (v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked') },
+        { label: 'Manual Discounts', key: 'can_apply_manual_discounts', render: (v) => (v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked') },
+        { label: 'View COGS / Costs', key: 'can_view_cost_prices', render: (v) => (v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked') },
+        { label: 'Adjust Inventory', key: 'can_adjust_inventory', render: (v) => (v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked') },
       ],
       data: rolesList,
       onAction: (action, id) => {
@@ -177,7 +411,7 @@ export async function mount(container) {
         { label: 'Phone', key: 'phone' },
         { label: 'National ID', key: 'national_id', render: (id) => id || '-' },
         { label: 'Daily Compensation', key: 'daily_wage', render: (w) => `${Number(w).toLocaleString()} ${currency}` },
-        { label: 'Status', key: 'is_active', render: (act) => act ? 'Active' : 'Inactive' },
+        { label: 'Status', key: 'is_active', render: (act) => (act ? 'Active' : 'Inactive') },
       ],
       data: data || [],
       onAction: (action, id) => {
@@ -206,7 +440,7 @@ export async function mount(container) {
         .filter((o) => o.cashier_id === member.id)
         .reduce((sum, o) => sum + Number(o.total || 0), 0);
       const rate = Number(member.commission_rate || 0);
-      const earned = Math.round((sales * (rate / 100)) * 100) / 100;
+      const earned = Math.round(sales * (rate / 100) * 100) / 100;
 
       return {
         id: member.id,
@@ -223,10 +457,10 @@ export async function mount(container) {
         { label: 'Employee', key: 'name', render: (n) => `<strong>${n}</strong>` },
         { label: 'Total Sales Generated', key: 'totalSales', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
         { label: 'Agreed Rate', key: 'rate' },
-        { 
-          label: 'Commission Accrued', 
-          key: 'earnedCommission', 
-          render: (v) => `<strong style="color:var(--teal-600);">${Number(v).toLocaleString()} ${currency}</strong>` 
+        {
+          label: 'Commission Accrued',
+          key: 'earnedCommission',
+          render: (v) => `<strong style="color:var(--teal-600);">${Number(v).toLocaleString()} ${currency}</strong>`,
         },
       ],
       data: report,
@@ -250,77 +484,15 @@ export async function mount(container) {
       targetId: 'emp-table-content',
       columns: [
         { label: 'Account Email', key: 'user_email', render: (e) => `<strong>${e}</strong>` },
-        { 
-          label: 'Event Type', 
-          key: 'event_type', 
-          render: (ev) => `<span class="badge ${ev === 'login' ? 'badge-teal' : ''}">${(ev || '').toUpperCase()}</span>` 
+        {
+          label: 'Event Type',
+          key: 'event_type',
+          render: (ev) => `<span class="badge ${ev === 'login' ? 'badge-teal' : ''}">${(ev || '').toUpperCase()}</span>`,
         },
         { label: 'Timestamp', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
-        { label: 'Details', key: 'details', render: (det) => det ? JSON.stringify(det) : '-' },
+        { label: 'Details', key: 'details', render: (det) => (det ? JSON.stringify(det) : '-') },
       ],
       data: data || [],
-    });
-  }
-
-  // =========================================================================
-  // Modals & Action Workflows
-  // =========================================================================
-
-  // Employee Edit Modal
-  async function openEmployeeModal(member) {
-    const { data: shops } = await supabase.from('shops').select('id, name');
-    const shopOpts = `<option value="">-- All Locations / Global --</option>` + (shops || []).map((s) => 
-      `<option value="${s.id}" ${member.shop_id === s.id ? 'selected' : ''}>${s.name}</option>`
-    ).join('');
-
-    Modal.open({
-      title: `Employee: ${member.full_name || member.email}`,
-      content: `
-        <form id="form-employee-edit">
-          <div class="form-group">
-            <label>Assigned System Role</label>
-            <select name="role">
-              <option value="cashier" ${member.role === 'cashier' ? 'selected' : ''}>Cashier</option>
-              <option value="staff" ${member.role === 'staff' ? 'selected' : ''}>Staff</option>
-              <option value="manager" ${member.role === 'manager' ? 'selected' : ''}>Manager</option>
-              <option value="admin" ${member.role === 'admin' ? 'selected' : ''}>Admin</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>Assigned Store Branch</label>
-            <select name="shop_id">${shopOpts}</select>
-          </div>
-          <div class="form-group">
-            <label>Sales Commission Rate (%)</label>
-            <input type="number" step="0.1" name="commission_rate" value="${member.commission_rate || 0}" />
-          </div>
-          <div class="form-group">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:normal;">
-              <input type="checkbox" name="is_active" ${member.is_active !== false ? 'checked' : ''} />
-              Account Active
-            </label>
-          </div>
-          <button type="submit" class="btn btn-teal-primary btn-block">Commit Employee Rights</button>
-        </form>
-      `,
-      onSubmit: async (formData) => {
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            role: formData.role,
-            shop_id: formData.shop_id || null,
-            commission_rate: parseFloat(formData.commission_rate) || 0,
-            is_active: formData.is_active === 'on',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', member.id);
-
-        if (error) Toast.error(error.message);
-        else {
-          Toast.success('Employee credentials updated.');
-          await loadActiveTab();
-        }
-      },
     });
   }
 
@@ -364,9 +536,7 @@ export async function mount(container) {
           updated_at: new Date().toISOString(),
         };
 
-        const { error } = await supabase
-          .from('role_permissions')
-          .upsert([payload], { onConflict: 'shop_id, role' });
+        const { error } = await supabase.from('role_permissions').upsert([payload], { onConflict: 'shop_id, role' });
 
         if (error) Toast.error(error.message);
         else {

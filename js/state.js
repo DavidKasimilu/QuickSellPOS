@@ -9,6 +9,23 @@ export const globalState = {
   activeShop: null,
   currentShift: null,
 
+  // System Feature Flags (Synced with store_settings)
+  features: {
+    open_orders: false,
+    shift_management: false,
+    time_clock: false,
+    multipayment: false,
+    taxes_charges: true,
+    order_types: false,
+    service_areas: false,
+    manage_currency: false,
+    email_notifications: false,
+    addon_apps: true,
+    kot_notes: false,
+    credit_note: false,
+    embedded_barcodes: false,
+  },
+
   // Regional & Currency Preferences (Defaults)
   preferences: {
     currency: 'KES',
@@ -145,6 +162,25 @@ export const globalState = {
     this.notify();
   },
 
+
+  updateFeatures(newFeatures = {}) {
+    this.features = { ...this.features, ...newFeatures };
+    localStorage.setItem('quicksell_features', JSON.stringify(this.features));
+    this.notifyKey('features', this.features);
+    this.notify();
+  },
+
+  loadStoredFeatures() {
+    try {
+      const saved = localStorage.getItem('quicksell_features');
+      if (saved) {
+        this.features = { ...this.features, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.warn('Could not read cached features');
+    }
+  },
+
   loadStoredPreferences() {
     try {
       const saved = localStorage.getItem('quicksell_prefs');
@@ -174,4 +210,5 @@ export const globalState = {
 };
 
 // Initialize cached preferences on module load
-globalState.loadStoredPreferences();``
+globalState.loadStoredPreferences();
+globalState.loadStoredFeatures();``
