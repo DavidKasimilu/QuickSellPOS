@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences.currency || 'KES';
@@ -84,7 +85,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderDiscountsTable(target) {
     let query = supabase.from('discount_plans').select('*').order('created_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -130,7 +131,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderPricingPlansTable(target) {
     let query = supabase.from('pricing_plans').select('*').order('created_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -167,7 +168,7 @@ export async function mount(container) {
       .select('*, categories(name), profiles(full_name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -311,9 +312,7 @@ export async function mount(container) {
   // Bulk Price Change Modal
   async function openBulkPriceChangeModal() {
     let catQuery = supabase.from('categories').select('id, name');
-    if (globalState.activeShopId) {
-      catQuery = catQuery.or(`shop_id.eq.${globalState.activeShopId},shop_id.is.null`);
-    }
+    catQuery = scoped(catQuery);
     const { data: categories } = await catQuery;
 
     const catOpts = `<option value="">-- Apply to All Catalog Items --</option>` + (categories || []).map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
@@ -351,7 +350,7 @@ export async function mount(container) {
 
         let query = supabase.from('products').select('id, retail_price');
         if (formData.category_id) query = query.eq('category_id', formData.category_id);
-        if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+        query = scoped(query);
 
         const { data: productsToUpdate, error: fetchErr } = await query;
         if (fetchErr || !productsToUpdate?.length) {

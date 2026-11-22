@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -76,7 +77,7 @@ export async function mount(container) {
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: tiers, error } = await query;
     if (error) {
@@ -119,7 +120,7 @@ export async function mount(container) {
       .select('*, products(name, barcode, retail_price), pricing_tiers(name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: rates, error } = await query;
     if (error) {

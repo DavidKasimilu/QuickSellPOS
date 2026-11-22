@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -75,7 +76,7 @@ export async function mount(container) {
       .select('*, products(name, barcode), profiles(full_name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: logs, error } = await query;
     if (error) {
@@ -109,7 +110,7 @@ export async function mount(container) {
       .is('deleted_at', null)
       .order('name', { ascending: true });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: products, error } = await query;
     if (error) {
@@ -134,7 +135,7 @@ export async function mount(container) {
   // =========================================================================
   async function openSinglePriceUpdateModal() {
     let query = supabase.from('products').select('id, name, retail_price, cost_price').eq('is_active', true).is('deleted_at', null).order('name');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: products } = await query;
 
@@ -283,7 +284,7 @@ export async function mount(container) {
         const adjVal = parseFloat(fd.adjustment_value) || 0;
 
         let query = supabase.from('products').select('id, retail_price').eq('is_active', true).is('deleted_at', null);
-        if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+        query = scoped(query);
         if (catId !== 'ALL') query = query.eq('category_id', catId);
 
         const { data: prodsToUpdate, error: fetchErr } = await query;

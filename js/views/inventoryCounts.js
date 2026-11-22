@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   let unsubs = [];
@@ -38,9 +39,7 @@ export async function mount(container) {
       .select('*, profiles(full_name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) {
-      query = query.eq('shop_id', globalState.activeShopId);
-    }
+    query = scoped(query);
 
     const { data: audits, error } = await query;
 

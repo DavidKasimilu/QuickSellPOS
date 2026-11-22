@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   let selectedCategoryIds = new Set();
@@ -50,9 +51,7 @@ export async function mount(container) {
       .is('deleted_at', null)
       .order('name', { ascending: true });
 
-    if (globalState.activeShopId) {
-      query = query.eq('shop_id', globalState.activeShopId);
-    }
+    query = scoped(query);
 
     const { data: cats, error } = await query;
 

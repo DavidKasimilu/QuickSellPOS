@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -235,9 +236,7 @@ export async function mount(container) {
       .gte('created_at', startISO)
       .lte('created_at', endISO);
 
-    if (globalState.activeShopId) {
-      query = query.eq('shop_id', globalState.activeShopId);
-    }
+    query = scoped(query);
 
     const { data: orders, error } = await query;
 

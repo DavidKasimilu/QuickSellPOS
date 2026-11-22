@@ -6,6 +6,7 @@ import { Toast } from '../components/Toast.js';
 import { PrinterDriver } from '../components/PrinterDriver.js';
 import { Exporter } from '../components/Exporter.js';
 import { PieChart } from '../components/PieChart.js';
+import { scoped, NIL_UUID } from '../tenant.js';
 
 export async function mount(container, activeTab = 'sales-summary', queryParams = new URLSearchParams()) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -35,10 +36,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     let custQuery = supabase.from('customers').select('id, name, phone').order('name');
     let staffQuery = supabase.from('profiles').select('id, full_name, email').order('full_name');
 
-    if (globalState.activeShopId) {
-      custQuery = custQuery.eq('shop_id', globalState.activeShopId);
-      staffQuery = staffQuery.eq('shop_id', globalState.activeShopId);
-    }
+    custQuery = scoped(custQuery);
+    staffQuery = scoped(staffQuery);
 
     const [custRes, staffRes] = await Promise.all([custQuery, staffQuery]);
     customersList = custRes.data || [];
@@ -222,7 +221,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   unsubs.push(globalState.subscribeKey('orders', () => loadView()));
 
   function applyBaseOrderFilters(query) {
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
     if (dateStart) query = query.gte('created_at', `${dateStart}T00:00:00.000Z`);
     if (dateEnd) query = query.lte('created_at', `${dateEnd}T23:59:59.999Z`);
     if (selectedCustomerId !== 'ALL') query = query.eq('customer_id', selectedCustomerId);
@@ -511,7 +510,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   async function renderSalesByProduct(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, quantity, total, orders!inner(shop_id, created_at, customer_id, cashier_id, is_deleted)').eq('orders.is_deleted', false);
-    if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
+    query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
     if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
     if (dateEnd) query = query.lte('orders.created_at', `${dateEnd}T23:59:59.999Z`);
 
@@ -552,7 +551,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   async function renderSalesByCategory(target, chartTarget) {
     let query = supabase.from('order_items').select('quantity, total, products(categories(name)), orders!inner(shop_id, created_at, is_deleted)').eq('orders.is_deleted', false);
-    if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
+    query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
     if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
     if (dateEnd) query = query.lte('orders.created_at', `${dateEnd}T23:59:59.999Z`);
 
@@ -624,7 +623,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   async function renderSalesByPaymentType(target, chartTarget) {
     let query = supabase.from('payments').select('amount, payment_method, orders!inner(shop_id, created_at, customer_id, cashier_id)').eq('orders.is_deleted', false);
-    if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
+    query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
     if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
     if (dateEnd) query = query.lte('orders.created_at', `${dateEnd}T23:59:59.999Z`);
 
@@ -692,7 +691,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   async function renderStoreChargesReport(target, chartTarget) {
     let query = supabase.from('store_charges').select('*');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: charges, error } = await query;
     if (error) {
@@ -722,7 +721,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   async function renderShiftsReport(target, chartTarget) {
     // FIXED: Shift staff foreign key
     let query = supabase.from('shifts').select('*, staff:profiles!shifts_staff_id_fkey(full_name, email)').order('opened_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: shifts, error } = await query;
     if (error) {
@@ -754,7 +753,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   async function renderProductWiseReceipts(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, quantity, unit_price, total, orders!inner(receipt_no, created_at)').order('id', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
+    query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
 
     const { data, error } = await query;
     if (error) {
@@ -816,7 +815,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   async function renderDeletedReceipts(target, chartTarget) {
     // FIXED: Deleted by profiles relation
     let query = supabase.from('orders').select('*, deleted_by_user:profiles!orders_deleted_by_fkey(full_name, email)').eq('is_deleted', true).order('deleted_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -886,7 +885,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   async function renderProductWiseTax(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, tax_rate, total, orders!inner(shop_id, created_at, is_deleted)').eq('orders.is_deleted', false);
-    if (globalState.activeShopId) query = query.eq('orders.shop_id', globalState.activeShopId);
+    query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
 
     const { data, error } = await query;
     if (error) {
@@ -1025,7 +1024,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   async function renderProductWiseDeletedReceipts(target, chartTarget) {
     // FIXED: Explicit profile foreign key
     let query = supabase.from('deleted_order_items').select('*, removed_by_user:profiles!deleted_order_items_removed_by_fkey(full_name, email)').order('created_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -1056,7 +1055,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   async function renderRefundAndCreditNotes(target, chartTarget) {
     let query = supabase.from('debtor_settlements').select('*, customers(name)').order('created_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -1086,7 +1085,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   async function renderDeletedProductsInOpenOrders(target, chartTarget) {
     // FIXED: Cashier profile relation
     let query = supabase.from('cart_discard_logs').select('*, cashier:profiles!cart_discard_logs_cashier_id_fkey(full_name, email)').order('created_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {

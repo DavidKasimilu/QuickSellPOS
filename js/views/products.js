@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -62,9 +63,7 @@ export async function mount(container) {
       .is('deleted_at', null)
       .order('name', { ascending: true });
 
-    if (globalState.activeShopId) {
-      query = query.eq('shop_id', globalState.activeShopId);
-    }
+    query = scoped(query);
 
     const { data: prods, error } = await query;
 
@@ -371,7 +370,7 @@ export async function mount(container) {
   // =========================================================================
   async function openPrintBarcodesModal() {
     let query = supabase.from('products').select('id, name, barcode, retail_price').eq('is_active', true).is('deleted_at', null);
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: products } = await query;
 

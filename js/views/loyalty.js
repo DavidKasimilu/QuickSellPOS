@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -80,7 +81,7 @@ export async function mount(container) {
       .is('deleted_at', null)
       .order('loyalty_points', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: customers, error } = await query;
     if (error) {
@@ -127,7 +128,7 @@ export async function mount(container) {
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: rules, error } = await query;
     if (error) {
@@ -161,7 +162,7 @@ export async function mount(container) {
       .select('*, customers(name), profiles(full_name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: logs, error } = await query;
     if (error) {
@@ -205,7 +206,7 @@ export async function mount(container) {
     let customerList = [];
     if (!targetCustomer) {
       let query = supabase.from('customers').select('id, name, loyalty_points').is('deleted_at', null).order('name');
-      if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+      query = scoped(query);
       const { data } = await query;
       customerList = data || [];
       if (!customerList.length) {

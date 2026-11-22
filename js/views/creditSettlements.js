@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -75,7 +76,7 @@ export async function mount(container) {
       .select('*, customers(name), profiles(full_name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: settlements, error } = await query;
     if (error) {
@@ -107,7 +108,7 @@ export async function mount(container) {
       .select('*, suppliers(name), profiles(full_name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: settlements, error } = await query;
     if (error) {
@@ -135,7 +136,7 @@ export async function mount(container) {
   // =========================================================================
   async function openCustomerSettlementModal() {
     let query = supabase.from('customers').select('id, name, credit_balance').gt('credit_balance', 0).is('deleted_at', null).order('name');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: debtors } = await query;
 
@@ -227,7 +228,7 @@ export async function mount(container) {
 
   async function openSupplierSettlementModal() {
     let query = supabase.from('suppliers').select('id, name, balance').is('deleted_at', null).order('name');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: suppliers } = await query;
 

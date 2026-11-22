@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { NIL_UUID } from '../tenant.js';
 
 export async function mount(container) {
   let unsubs = [];
@@ -38,8 +39,9 @@ export async function mount(container) {
       .select('*, source_shop:shops!source_shop_id(name), target_shop:shops!target_shop_id(name), profiles(full_name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) {
-      query = query.or(`source_shop_id.eq.${globalState.activeShopId},target_shop_id.eq.${globalState.activeShopId}`);
+    {
+      const sid = globalState.activeShopId || NIL_UUID;
+      query = query.or(`source_shop_id.eq.${sid},target_shop_id.eq.${sid}`);
     }
 
     const { data: transfers, error } = await query;

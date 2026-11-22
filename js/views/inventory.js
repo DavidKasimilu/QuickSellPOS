@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences.currency || 'KES';
@@ -157,7 +158,7 @@ export async function mount(container) {
       .select('*, products(id, name, sku, barcode, retail_price, cost_price)')
       .order('quantity_on_hand');
     
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -198,7 +199,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderValuationReport(target) {
     let query = supabase.from('inventory').select('quantity_on_hand, products(id, name, sku, cost_price, retail_price)');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: items, error } = await query;
     if (error) {
@@ -286,7 +287,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderExpiryTrackingTable(target) {
     let query = supabase.from('inventory_batches').select('*, products(name), suppliers(name)').order('expiry_date');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: batches, error } = await query;
     if (error) {
@@ -330,10 +331,8 @@ export async function mount(container) {
     let pQuery = supabase.from('products').select('id, name');
     let sQuery = supabase.from('suppliers').select('id, name');
 
-    if (globalState.activeShopId) {
-      pQuery = pQuery.eq('shop_id', globalState.activeShopId);
-      sQuery = sQuery.eq('shop_id', globalState.activeShopId);
-    }
+    pQuery = scoped(pQuery);
+    sQuery = scoped(sQuery);
 
     Promise.all([pQuery, sQuery]).then(([{ data: prods }, { data: supps }]) => {
       const prodOpts = (prods || []).map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
@@ -398,7 +397,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderAuditsTable(target) {
     let query = supabase.from('inventory_audits').select('*, profiles!initiated_by(full_name)').order('created_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: audits, error } = await query;
     if (error) {
@@ -425,7 +424,7 @@ export async function mount(container) {
 
   async function openStocktakeSessionModal() {
     let invQuery = supabase.from('inventory').select('product_id, quantity_on_hand, products(name)');
-    if (globalState.activeShopId) invQuery = invQuery.eq('shop_id', globalState.activeShopId);
+    invQuery = scoped(invQuery);
 
     const { data: stockItems } = await invQuery;
     if (!stockItems?.length) {
@@ -587,7 +586,7 @@ export async function mount(container) {
 
   async function openRecipeBuilderModal() {
     let pQuery = supabase.from('products').select('id, name');
-    if (globalState.activeShopId) pQuery = pQuery.eq('shop_id', globalState.activeShopId);
+    pQuery = scoped(pQuery);
 
     const { data: prods } = await pQuery;
     if ((prods || []).length < 2) {
@@ -643,7 +642,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderPOTable(target) {
     let query = supabase.from('purchase_orders').select('*, suppliers(name)').order('created_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data } = await query;
     renderDataTable({
@@ -664,10 +663,8 @@ export async function mount(container) {
     let pQuery = supabase.from('products').select('id, name, cost_price');
     let sQuery = supabase.from('suppliers').select('id, name');
 
-    if (globalState.activeShopId) {
-      pQuery = pQuery.eq('shop_id', globalState.activeShopId);
-      sQuery = sQuery.eq('shop_id', globalState.activeShopId);
-    }
+    pQuery = scoped(pQuery);
+    sQuery = scoped(sQuery);
 
     const [{ data: prods }, { data: supps }] = await Promise.all([pQuery, sQuery]);
     const prodOpts = (prods || []).map((p) => `<option value="${p.id}" data-cost="${p.cost_price || 0}">${p.name}</option>`).join('');
@@ -754,7 +751,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderGRNTable(target) {
     let query = supabase.from('goods_received_notes').select('*, suppliers(name)').order('received_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data } = await query;
     renderDataTable({
@@ -774,10 +771,8 @@ export async function mount(container) {
     let pQuery = supabase.from('products').select('id, name, cost_price');
     let sQuery = supabase.from('suppliers').select('id, name');
 
-    if (globalState.activeShopId) {
-      pQuery = pQuery.eq('shop_id', globalState.activeShopId);
-      sQuery = sQuery.eq('shop_id', globalState.activeShopId);
-    }
+    pQuery = scoped(pQuery);
+    sQuery = scoped(sQuery);
 
     const [{ data: prods }, { data: supps }] = await Promise.all([pQuery, sQuery]);
     const prodOpts = (prods || []).map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
@@ -870,7 +865,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderPRNTable(target) {
     let query = supabase.from('purchase_return_notes').select('*, suppliers(name)').order('created_at', { ascending: false });
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data } = await query;
     renderDataTable({
@@ -890,10 +885,8 @@ export async function mount(container) {
     let pQuery = supabase.from('inventory').select('product_id, quantity_on_hand, products(name)');
     let sQuery = supabase.from('suppliers').select('id, name');
 
-    if (globalState.activeShopId) {
-      pQuery = pQuery.eq('shop_id', globalState.activeShopId);
-      sQuery = sQuery.eq('shop_id', globalState.activeShopId);
-    }
+    pQuery = scoped(pQuery);
+    sQuery = scoped(sQuery);
 
     const [{ data: invItems }, { data: supps }] = await Promise.all([pQuery, sQuery]);
     const prodOpts = (invItems || []).map((i) => `<option value="${i.product_id}" data-max="${i.quantity_on_hand}">${i.products?.name} (Available: ${i.quantity_on_hand})</option>`).join('');

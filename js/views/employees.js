@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences.currency || 'KES';
@@ -97,7 +98,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderEmployeesTable(target) {
     let query = supabase.from('profiles').select('*, shops(name)').order('full_name');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: staff, error } = await query;
     if (error) {
@@ -366,7 +367,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderAccessRightsTable(target) {
     let query = supabase.from('role_permissions').select('*').order('role');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -405,7 +406,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderOtherStaffTable(target) {
     let query = supabase.from('auxiliary_staff').select('*').order('full_name');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {
@@ -438,10 +439,8 @@ export async function mount(container) {
     let profQuery = supabase.from('profiles').select('id, full_name, email, commission_rate');
     let ordQuery = supabase.from('orders').select('cashier_id, total').eq('order_status', 'completed');
 
-    if (globalState.activeShopId) {
-      profQuery = profQuery.eq('shop_id', globalState.activeShopId);
-      ordQuery = ordQuery.eq('shop_id', globalState.activeShopId);
-    }
+    profQuery = scoped(profQuery);
+    ordQuery = scoped(ordQuery);
 
     const [{ data: staff }, { data: orders }] = await Promise.all([profQuery, ordQuery]);
 
@@ -482,7 +481,7 @@ export async function mount(container) {
   // =========================================================================
   async function renderAccessLogsTable(target) {
     let query = supabase.from('access_logs').select('*').order('created_at', { ascending: false }).limit(50);
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data, error } = await query;
     if (error) {

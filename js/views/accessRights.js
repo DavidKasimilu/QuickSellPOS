@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   let activeTab = 'roles'; // 'roles' | 'staff'
@@ -75,7 +76,7 @@ export async function mount(container) {
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: roles, error } = await query;
     if (error) {
@@ -118,7 +119,7 @@ export async function mount(container) {
       .select('*, profiles(full_name, email), user_roles(role_name)')
       .order('created_at', { ascending: false });
 
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: staffList, error } = await query;
     if (error) {

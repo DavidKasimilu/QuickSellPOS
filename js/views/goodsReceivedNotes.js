@@ -3,6 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
+import { scoped } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -39,9 +40,7 @@ export async function mount(container) {
       .select('*, purchase_orders(po_number), suppliers(name), profiles(full_name)')
       .order('received_at', { ascending: false });
 
-    if (globalState.activeShopId) {
-      query = query.eq('shop_id', globalState.activeShopId);
-    }
+    query = scoped(query);
 
     const { data: grns, error } = await query;
 
