@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
 import { Toast } from './Toast.js';
+import { scoped } from '../tenant.js';
 
 export const BarcodeGenerator = {
   patterns: [
@@ -175,9 +176,7 @@ export async function mount(container) {
     .is('deleted_at', null)
     .order('name', { ascending: true });
 
-  if (globalState.activeShopId) {
-    query = query.eq('shop_id', globalState.activeShopId);
-  }
+  query = scoped(query);
 
   const { data: prods } = await query;
   products = prods || [];
