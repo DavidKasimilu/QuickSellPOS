@@ -3,6 +3,7 @@ import { globalState } from '../../state.js';
 import { Modal } from '../../components/Modal.js';
 import { renderDataTable } from '../../components/DataTable.js';
 import { Toast } from '../../components/Toast.js';
+import { scoped } from '../../tenant.js';
 
 // =========================================================================
 // 1. FEATURES TOGGLES (Matches Screenshots 1 & 2)
@@ -234,7 +235,7 @@ export async function renderTaxesPane(target) {
 
   async function loadTaxes() {
     let query = supabase.from('store_taxes').select('*').order('created_at');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
     const { data, error } = await query;
 
     if (error) {
@@ -517,7 +518,7 @@ export async function renderOrderTypesPane(target) {
 
   async function load() {
     let q = supabase.from('store_order_types').select('*').order('created_at');
-    if (globalState.activeShopId) q = q.eq('shop_id', globalState.activeShopId);
+    q = scoped(q);
     const { data } = await q;
     renderDataTable({
       targetId: 'settings-ordertypes-table',
@@ -594,7 +595,7 @@ export async function renderServiceAreasPane(target) {
 
   async function load() {
     let q = supabase.from('store_service_areas').select('*').order('name');
-    if (globalState.activeShopId) q = q.eq('shop_id', globalState.activeShopId);
+    q = scoped(q);
     const { data } = await q;
     renderDataTable({
       targetId: 'settings-areas-table',
@@ -672,7 +673,7 @@ export async function renderCurrencyPane(target) {
 
   async function load() {
     let q = supabase.from('store_currencies').select('*').order('created_at');
-    if (globalState.activeShopId) q = q.eq('shop_id', globalState.activeShopId);
+    q = scoped(q);
     const { data } = await q;
     renderDataTable({
       targetId: 'settings-curr-table',

@@ -3,6 +3,7 @@ import { globalState } from '../../state.js';
 import { Modal } from '../../components/Modal.js';
 import { renderDataTable } from '../../components/DataTable.js';
 import { Toast } from '../../components/Toast.js';
+import { scoped } from '../../tenant.js';
 
 // =========================================================================
 // 1. DESIGN RECEIPT (With Live Thermal Slip Preview)
@@ -235,7 +236,7 @@ export async function renderPaymentTypesPane(target) {
 
   async function loadPayments() {
     let query = supabase.from('store_payment_methods').select('*').order('created_at');
-    if (globalState.activeShopId) query = query.eq('shop_id', globalState.activeShopId);
+    query = scoped(query);
 
     const { data: methods, error } = await query;
     if (error) {

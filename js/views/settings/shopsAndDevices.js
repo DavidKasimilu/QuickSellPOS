@@ -4,6 +4,7 @@ import { Modal } from '../../components/Modal.js';
 import { renderDataTable } from '../../components/DataTable.js';
 import { Toast } from '../../components/Toast.js';
 import { DeviceTracker } from '../../components/DeviceTracker.js';
+import { scoped } from '../../tenant.js';
 
 // =========================================================================
 // 1. SHOPS (Store Branches)
@@ -132,7 +133,10 @@ function openShopModal(shop, onSaved, onShopSwitched) {
       const swBtn = document.getElementById('btn-switch-this-shop');
       if (swBtn) {
         swBtn.onclick = () => {
-          globalState.setActiveShop(shop);
+          if (!globalState.setActiveShop(shop)) {
+            Toast.error('You are not allowed to switch to that store.');
+            return;
+          }
           const badge = document.getElementById('badge-active-shop');
           if (badge) badge.textContent = shop.name;
           Toast.success(`Switched active store to: ${shop.name}`);
@@ -182,10 +186,8 @@ export async function renderPosDevicesPane(target) {
       .order('last_seen_at', { ascending: false });
     let devQuery = supabase.from('pos_devices').select('*').order('created_at');
 
-    if (globalState.activeShopId) {
-      sessQuery = sessQuery.eq('shop_id', globalState.activeShopId);
-      devQuery = devQuery.eq('shop_id', globalState.activeShopId);
-    }
+    sessQuery = scoped(sessQuery);
+    devQuery = scoped(devQuery);
 
     const [{ data: sessions }, { data: devices }] = await Promise.all([sessQuery, devQuery]);
     const now = Date.now();
