@@ -455,12 +455,17 @@
 
             <div class="form-group" style="flex:1;">
               <label for="profile-phone-code">Phone Country Code</label>
-              <input type="text" id="profile-phone-code" placeholder="+254" required />
+              <input type="text" id="profile-phone-code" placeholder="+254" required pattern="\+[0-9]{1,4}" title="Use the format +254" />
             </div>
           </div>
 
           <div class="form-group">
-            <label for="profile-currency">Currency Preference</label>
+            <label for="profile-phone">Phone Number</label>
+            <input type="tel" id="profile-phone" placeholder="712345678" inputmode="numeric" pattern="[0-9 ]{6,15}" title="Digits only, without the country code" />
+          </div>
+
+          <div class="form-group">
+            <label for="profile-currency">Store Currency</label>
             <select id="profile-currency" required>
               <option value="KES">KES - Kenyan Shilling</option>
               <option value="TZS">TZS - Tanzanian Shilling</option>
@@ -471,6 +476,7 @@
               <option value="GBP">GBP - British Pound</option>
               <option value="USD">USD - US Dollar</option>
             </select>
+            <small id="profile-currency-hint" style="display:block; margin-top:6px; color:var(--text-muted);"></small>
           </div>
 
           <div class="form-group">

@@ -500,6 +500,22 @@ function bindAuthActions() {
 // =========================================================================
 // Profile Drawer & Date Filtering
 // =========================================================================
+const COUNTRY_DEFAULTS = {
+  'Kenya': { code: '+254', currency: 'KES' },
+  'Tanzania': { code: '+255', currency: 'TZS' },
+  'Uganda': { code: '+256', currency: 'UGX' },
+  'Rwanda': { code: '+250', currency: 'RWF' },
+  'Nigeria': { code: '+234', currency: 'NGN' },
+  'South Africa': { code: '+27', currency: 'ZAR' },
+  'United Kingdom': { code: '+44', currency: 'GBP' },
+  'United States': { code: '+1', currency: 'USD' },
+};
+
+// Currency belongs to the STORE (shared by all staff and devices), so only owners/admins can change it.
+function canChangeStoreCurrency() {
+  return ['admin', 'owner'].includes(globalState.role);
+}
+
 function bindProfileDrawer() {
   const drawer = document.getElementById('drawer-profile');
   const openBtn = document.getElementById('btn-open-profile');
@@ -508,20 +524,30 @@ function bindProfileDrawer() {
 
   if (!drawer || !openBtn) return;
 
-  openBtn.onclick = () => {
-    const emailEl = document.getElementById('profile-email');
-    const nameEl = document.getElementById('profile-fullname');
-    const currencyEl = document.getElementById('profile-currency');
-    const countryEl = document.getElementById('profile-country');
-    const phoneCodeEl = document.getElementById('profile-phone-code');
-    const timezoneEl = document.getElementById('profile-timezone');
+  const el = (id) => document.getElementById(id);
 
-    if (emailEl) emailEl.value = globalState.user?.email || '';
-    if (nameEl) nameEl.value = globalState.profile?.full_name || '';
-    if (currencyEl) currencyEl.value = globalState.preferences?.currency || 'KES';
-    if (countryEl) countryEl.value = globalState.profile?.country || 'Kenya';
-    if (phoneCodeEl) phoneCodeEl.value = globalState.profile?.phone_code || '+254';
-    if (timezoneEl) timezoneEl.value = globalState.preferences?.timezone || 'Africa/Nairobi';
+  openBtn.onclick = () => {
+    const canCurrency = canChangeStoreCurrency();
+    const storeCurrency = globalState.activeShop?.currency || globalState.preferences?.currency || 'KES';
+
+    if (el('profile-email')) el('profile-email').value = globalState.user?.email || '';
+    if (el('profile-fullname')) el('profile-fullname').value = globalState.profile?.full_name || '';
+    if (el('profile-country')) el('profile-country').value = globalState.profile?.country || 'Kenya';
+    if (el('profile-phone-code')) el('profile-phone-code').value = globalState.profile?.phone_country_code || '+254';
+    if (el('profile-phone')) el('profile-phone').value = globalState.profile?.phone || '';
+    if (el('profile-timezone')) el('profile-timezone').value = globalState.preferences?.timezone || 'Africa/Nairobi';
+
+    const currencyEl = el('profile-currency');
+    if (currencyEl) {
+      currencyEl.value = storeCurrency;
+      currencyEl.disabled = !canCurrency;
+    }
+    const hint = el('profile-currency-hint');
+    if (hint) {
+      hint.textContent = canCurrency
+        ? 'Applies to this store for all staff and devices. Existing amounts are NOT converted - only the currency label changes.'
+        : 'Set by your store administrator.';
+    }
 
     drawer.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons({ root: drawer });
@@ -531,45 +557,81 @@ function bindProfileDrawer() {
     closeBtn.onclick = () => drawer.classList.add('hidden');
   }
 
+  // Picking a country fills in its dialing code (and suggests its currency if you may change it)
+  const countryEl = el('profile-country');
+  if (countryEl) {
+    countryEl.onchange = () => {
+      const d = COUNTRY_DEFAULTS[countryEl.value];
+      if (!d) return;
+      if (el('profile-phone-code')) el('profile-phone-code').value = d.code;
+      if (canChangeStoreCurrency() && el('profile-currency')) el('profile-currency').value = d.currency;
+    };
+  }
+
   if (form) {
     form.onsubmit = async (e) => {
       e.preventDefault();
-      const fullName = document.getElementById('profile-fullname')?.value.trim() || '';
-      const country = document.getElementById('profile-country')?.value || 'Kenya';
-      const phoneCode = document.getElementById('profile-phone-code')?.value.trim() || '+254';
-      const currency = document.getElementById('profile-currency')?.value || 'KES';
-      const timezone = document.getElementById('profile-timezone')?.value || 'Africa/Nairobi';
-      const newPassword = document.getElementById('profile-new-password')?.value;
 
-      const newPreferences = {
-        currency,
-        timezone,
-      };
+      const fullName = el('profile-fullname')?.value.trim() || '';
+      const country = el('profile-country')?.value || 'Kenya';
+      const phoneCode = (el('profile-phone-code')?.value || '').trim().replace(/\s+/g, '');
+      const phone = (el('profile-phone')?.value || '').replace(/[\s-]/g, '');
+      const currency = el('profile-currency')?.value || 'KES';
+      const timezone = el('profile-timezone')?.value || 'Africa/Nairobi';
+      const newPassword = el('profile-new-password')?.value;
 
-      globalState.updatePreferences(newPreferences);
+      if (!fullName) return Toast.error('Full name is required.');
+      if (!/^\+\d{1,4}$/.test(phoneCode)) return Toast.error('Phone country code must look like +254.');
+      if (phone && !/^\d{6,15}$/.test(phone)) return Toast.error('Phone number must be 6-15 digits, without the country code.');
+      if (!globalState.user?.id) return Toast.error('You are not signed in.');
 
-      if (globalState.user?.id) {
-        const { error } = await supabase
-          .from('profiles')
-          .update({
-            full_name: fullName,
-            country: country,
-            phone_code: phoneCode,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', globalState.user.id);
+      // 1) Personal details (RLS lets you edit ONLY your own name, phone and country)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          country,
+          phone_country_code: phoneCode,
+          phone: phone || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', globalState.user.id);
 
-        if (error) {
-          Toast.error(error.message);
-          return;
-        }
+      if (profileError) {
+        Toast.error(profileError.message);
+        return;
+      }
 
-        if (globalState.profile) {
-          globalState.profile.full_name = fullName;
-          globalState.profile.country = country;
-          globalState.profile.phone_code = phoneCode;
+      if (globalState.profile) {
+        globalState.profile.full_name = fullName;
+        globalState.profile.country = country;
+        globalState.profile.phone_country_code = phoneCode;
+        globalState.profile.phone = phone || null;
+      }
+
+      // 2) Store currency (saved on the shop, so it is the same everywhere)
+      const currentCurrency = globalState.activeShop?.currency || globalState.preferences?.currency || 'KES';
+      if (canChangeStoreCurrency() && currency !== currentCurrency) {
+        const ok = window.confirm(
+          `Change the store currency from ${currentCurrency} to ${currency}?\n\n` +
+          'Amounts are NOT converted. Existing prices and past sales keep their numbers; only the currency label changes.'
+        );
+        if (ok) {
+          const { error: shopError } = await supabase
+            .from('shops')
+            .update({ currency })
+            .eq('id', globalState.activeShopId);
+
+          if (shopError) {
+            Toast.error(`Details saved, but the currency was not changed: ${shopError.message}`);
+            return;
+          }
+          globalState.updateActiveShop({ currency });
         }
       }
+
+      // 3) Timezone is a per-device display preference
+      globalState.updatePreferences({ timezone });
 
       if (newPassword && newPassword.length >= 8) {
         try {
@@ -580,7 +642,7 @@ function bindProfileDrawer() {
         }
       }
 
-      Toast.success('Profile preferences saved.');
+      Toast.success('Profile saved.');
       drawer.classList.add('hidden');
       navigate();
     };

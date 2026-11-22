@@ -122,6 +122,7 @@ function openShopModal(shop, onSaved, onShopSwitched) {
 
       if (error) Toast.error(error.message);
       else {
+        if (isEdit && shop.id === globalState.activeShopId) globalState.updateActiveShop(formData);
         Toast.success(isEdit ? 'Shop updated.' : 'Store branch registered.');
         await onSaved();
       }

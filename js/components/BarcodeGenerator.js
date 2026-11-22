@@ -56,7 +56,7 @@ export const BarcodeGenerator = {
     `;
   },
 
-  printLabels(product, quantity = 24, currency = 'KES') {
+  printLabels(product, quantity = 24, currency = globalState.preferences?.currency || 'KES') {
     const code = product.barcode || product.sku || `QS${product.id.slice(0, 8).toUpperCase()}`;
     const svg = this.encode(code);
 

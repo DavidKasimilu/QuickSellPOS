@@ -173,8 +173,24 @@ export const globalState = {
     }
     this.activeShop = shop;
     this.activeShopId = shop?.id || null;
+    // The shop is the single source of truth for currency (shared by every staff member and device)
+    if (shop?.currency) {
+      this.preferences = { ...this.preferences, currency: shop.currency };
+      try { localStorage.setItem('quicksell_prefs', JSON.stringify(this.preferences)); } catch (e) { /* ignore */ }
+    }
     this.notify();
     return true;
+  },
+
+  // Apply saved changes to the active shop record (e.g. currency) without a reload
+  updateActiveShop(patch = {}) {
+    if (!this.activeShop) return;
+    this.activeShop = { ...this.activeShop, ...patch };
+    if (patch.currency) {
+      this.preferences = { ...this.preferences, currency: patch.currency };
+      try { localStorage.setItem('quicksell_prefs', JSON.stringify(this.preferences)); } catch (e) { /* ignore */ }
+    }
+    this.notify();
   },
 
   setFilterDate(dateStr) {
