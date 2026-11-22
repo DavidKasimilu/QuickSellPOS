@@ -1,13 +1,15 @@
 import { supabase } from './supabaseClient.js';
-import { globalState } from './state.js';
+import { globalState, wipeLocalCaches } from './state.js';
 import { Toast } from './components/Toast.js';
 
 export const Auth = {
   // Sign in using email and password
   async signIn(email, password) {
+    this.resetClientState(); // never inherit anything from a previous user on this device
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    await this.syncSession();
+    const state = await this.syncSession();
+    if (!state) throw new Error(this.lastRejection || 'Sign-in blocked for this account.');
 
     // Audit login access event
     try {
@@ -58,7 +60,8 @@ export const Auth = {
       type: 'signup',
     });
     if (error) throw error;
-    await this.syncSession();
+    const state = await this.syncSession();
+    if (!state) throw new Error(this.lastRejection || 'Your account is not ready yet. Please sign in again shortly.');
     return data;
   },
 
@@ -98,79 +101,78 @@ export const Auth = {
     return data;
   },
 
-  // Read session, load profile, and synchronize memory store
+  lastRejection: '',
+
+  // Wipe every cached trace of the previous session (shared POS terminals!)
+  resetClientState() {
+    globalState.clear();
+    wipeLocalCaches();
+  },
+
+  async rejectSession(message) {
+    this.lastRejection = message;
+    try { await supabase.auth.signOut(); } catch (e) { /* ignore */ }
+    this.resetClientState();
+    return null;
+  },
+
+  // The signup DB trigger creates the profile; allow a short window for it to commit.
+  async loadProfile(userId) {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      if (data) return data;
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    }
+    return null;
+  },
+
+  // Read session, load profile + shop (strictly the user's own), and synchronize memory store
   async syncSession() {
+    this.lastRejection = '';
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error || !session?.user) {
-      globalState.clear();
-      this.clearLocalStorageMirrors();
+      this.resetClientState();
       return null;
     }
 
     const user = session.user;
 
-    // Fetch user profile from the database
-    let { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
+    // Caches left by a different user on this browser must not leak into this session
+    const cacheOwner = window.localStorage.getItem('qs_cache_owner');
+    if (cacheOwner && cacheOwner !== user.id) this.resetClientState();
+    window.localStorage.setItem('qs_cache_owner', user.id);
 
-    // Fallback profile synchronization if database trigger hasn't committed yet
+    // Profile is created server-side only (signup trigger). No client-side fallback creation:
+    // a client must never be able to mint its own role or store assignment.
+    const profile = await this.loadProfile(user.id);
     if (!profile) {
-      const isAdminAccount = user.email === 'davidkasimilu71@gmail.com';
-      const userMeta = user.user_metadata || {};
-      const { data: createdProfile } = await supabase
-        .from('profiles')
-        .upsert([{
-          id: user.id,
-          email: user.email,
-          full_name: userMeta.full_name || '',
-          country: userMeta.country || 'Kenya',
-          role: isAdminAccount ? 'admin' : 'cashier',
-          updated_at: new Date().toISOString()
-        }])
-        .select()
-        .single();
-      profile = createdProfile;
+      return this.rejectSession('Your account is not linked to a store yet. Contact your administrator.');
+    }
+    if (profile.is_active === false) {
+      return this.rejectSession('This account has been deactivated. Contact your administrator.');
     }
 
-    // Load active shop context strictly matching profile or user assignments
-    let activeShop = null;
-    if (profile?.shop_id) {
-      const { data: shop } = await supabase
-        .from('shops')
-        .select('*')
-        .eq('id', profile.shop_id)
-        .maybeSingle();
-      if (shop) activeShop = shop;
-    } else {
-      // Select first available shop branch
-      const { data: firstShop } = await supabase
-        .from('shops')
-        .select('*')
-        .order('created_at')
-        .limit(1)
-        .maybeSingle();
-      if (firstShop) activeShop = firstShop;
+    // Resolve the active shop strictly from the profile's own assignment / organization
+    let shopQuery = null;
+    if (profile.shop_id) {
+      shopQuery = supabase.from('shops').select('*').eq('id', profile.shop_id);
+    } else if (profile.organization_id) {
+      shopQuery = supabase.from('shops').select('*')
+        .eq('organization_id', profile.organization_id)
+        .order('created_at').limit(1);
     }
+    const { data: shop } = shopQuery ? await shopQuery.maybeSingle() : { data: null };
 
-    if (activeShop) {
-      globalState.setActiveShop(activeShop);
-      window.localStorage.setItem('qs_active_shop_id', activeShop.id);
+    if (!shop) {
+      return this.rejectSession('No store is assigned to your account. Contact your administrator.');
     }
-
-    if (profile) {
-      window.localStorage.setItem('qs_user_profile', JSON.stringify(profile));
+    if (profile.organization_id && shop.organization_id && profile.organization_id !== shop.organization_id) {
+      return this.rejectSession('Account/store mismatch detected. Contact support.');
     }
 
     globalState.setUser(user, profile);
+    globalState.setActiveShop(shop);
     return globalState;
-  },
-
-  clearLocalStorageMirrors() {
-    window.localStorage.removeItem('qs_user_profile');
-    window.localStorage.removeItem('qs_active_shop_id');
   },
 
   // Log out and return to sign in
@@ -190,8 +192,7 @@ export const Auth = {
     }
 
     await supabase.auth.signOut();
-    globalState.clear();
-    this.clearLocalStorageMirrors();
+    this.resetClientState();
     window.location.hash = '#dashboard';
     window.location.reload();
   },

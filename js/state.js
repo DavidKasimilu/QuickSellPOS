@@ -1,3 +1,42 @@
+// Local caches that belong to a tenant/user and must never survive a user switch.
+export function wipeLocalCaches() {
+  try {
+    const KEEP = new Set(['qs_pos_device_fingerprint']);
+    Object.keys(window.localStorage).forEach((k) => {
+      if ((k.startsWith('qs_') || k.startsWith('quicksell_')) && !KEEP.has(k)) {
+        window.localStorage.removeItem(k);
+      }
+    });
+    window.sessionStorage.clear();
+  } catch (e) {
+    /* storage unavailable */
+  }
+}
+
+const DEFAULT_FEATURES = {
+  open_orders: false,
+  shift_management: false,
+  time_clock: false,
+  multipayment: false,
+  taxes_charges: true,
+  order_types: false,
+  service_areas: false,
+  manage_currency: false,
+  email_notifications: false,
+  addon_apps: true,
+  kot_notes: false,
+  credit_note: false,
+  embedded_barcodes: false,
+};
+
+const DEFAULT_PREFERENCES = {
+  currency: 'KES',
+  timezone: 'Africa/Nairobi',
+  dateFormat: 'DD/MM/YYYY',
+  timeFormat: '24h',
+  language: 'en',
+};
+
 export const globalState = {
   // Session & User
   user: null,
@@ -10,30 +49,10 @@ export const globalState = {
   currentShift: null,
 
   // System Feature Flags (Synced with store_settings)
-  features: {
-    open_orders: false,
-    shift_management: false,
-    time_clock: false,
-    multipayment: false,
-    taxes_charges: true,
-    order_types: false,
-    service_areas: false,
-    manage_currency: false,
-    email_notifications: false,
-    addon_apps: true,
-    kot_notes: false,
-    credit_note: false,
-    embedded_barcodes: false,
-  },
+  features: { ...DEFAULT_FEATURES },
 
   // Regional & Currency Preferences (Defaults)
-  preferences: {
-    currency: 'KES',
-    timezone: 'Africa/Nairobi',
-    dateFormat: 'DD/MM/YYYY',
-    timeFormat: '24h',
-    language: 'en',
-  },
+  preferences: { ...DEFAULT_PREFERENCES },
 
   // Active Date Filter for Analytics & Date Ranges
   filterDate: new Date().toISOString().split('T')[0],
@@ -130,7 +149,8 @@ export const globalState = {
   setUser(user, profile = null) {
     this.user = user;
     this.profile = profile;
-    this.role = profile?.role || (user?.email === 'davidkasimilu71@gmail.com' ? 'admin' : 'cashier');
+    // Role comes ONLY from the server-side profile. Least privilege when unknown.
+    this.role = profile?.role || 'cashier';
     if (profile?.shop_id) {
       this.activeShopId = profile.shop_id;
     }
@@ -138,9 +158,23 @@ export const globalState = {
   },
 
   setActiveShop(shop) {
+    // Tenant guard: never accept a shop outside the signed-in user's own scope.
+    if (shop) {
+      const p = this.profile;
+      const isOrgAdmin = ['admin', 'owner'].includes(this.role);
+      if (p?.organization_id && shop.organization_id && shop.organization_id !== p.organization_id) {
+        console.error('[Tenant] Blocked switch to a shop outside your organization.');
+        return false;
+      }
+      if (p && !isOrgAdmin && p.shop_id && shop.id !== p.shop_id) {
+        console.error('[Tenant] Blocked switch: your role is limited to your assigned shop.');
+        return false;
+      }
+    }
     this.activeShop = shop;
     this.activeShopId = shop?.id || null;
     this.notify();
+    return true;
   },
 
   setFilterDate(dateStr) {
@@ -199,6 +233,8 @@ export const globalState = {
     this.activeShopId = null;
     this.activeShop = null;
     this.currentShift = null;
+    this.features = { ...DEFAULT_FEATURES };
+    this.preferences = { ...DEFAULT_PREFERENCES };
     this.products = [];
     this.categories = [];
     this.inventory = [];
