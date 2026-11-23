@@ -157,6 +157,10 @@ export const Auth = {
       return this.rejectSession('This account has been deactivated. Contact your administrator.');
     }
 
+    if (!profile.organization_id) {
+      return this.rejectSession('Your account is not attached to a company yet. Contact your administrator.');
+    }
+
     // Resolve the active shop strictly from the profile's own assignment / organization
     let shopQuery = null;
     if (profile.shop_id) {
