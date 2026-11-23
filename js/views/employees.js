@@ -321,7 +321,7 @@ export async function mount(container) {
 
         if (payload.role !== 'admin' && !payload.shop_id) {
           Toast.error('Choose a store branch for this employee (only admins can be company-wide).');
-          throw new Error('validation');
+          return false;
         }
 
         if (isEdit) {
@@ -332,7 +332,7 @@ export async function mount(container) {
             .eq('id', member.id);
           if (error) {
             Toast.error(error.message);
-            throw new Error('save-failed');
+            return false;
           }
           Toast.success('Employee details updated.');
         } else {
@@ -342,7 +342,7 @@ export async function mount(container) {
           });
           if (error || data?.error) {
             Toast.error(data?.error || error.message || 'Could not create the employee.');
-            throw new Error('create-failed');
+            return false;
           }
           Toast.success(`Employee "${payload.full_name}" added.`);
 
