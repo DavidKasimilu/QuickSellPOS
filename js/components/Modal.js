@@ -54,8 +54,8 @@ export const Modal = {
         form.onsubmit = async (e) => {
           e.preventDefault();
           const formData = Object.fromEntries(new FormData(form).entries());
-          await onSubmit(formData);
-          this.close();
+          const result = await onSubmit(formData);
+          if (result !== false) this.close(); // return false from onSubmit to keep the dialog open
         };
       }
     }
