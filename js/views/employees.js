@@ -163,6 +163,9 @@ export async function mount(container) {
                     <button class="btn btn-outline btn-sm" data-emp-edit="${member.id}" style="margin-right:6px;">
                       Edit
                     </button>
+                    <button class="btn btn-outline btn-sm" data-emp-reset="${member.id}" style="margin-right:6px;" ${isSelf ? 'disabled title="Use your profile to change your own password"' : ''}>
+                      Reset password
+                    </button>
                     <button class="btn btn-outline btn-sm text-danger" data-emp-delete="${member.id}" ${isSelf ? 'disabled title="Cannot delete your own account"' : ''}>
                       Delete
                     </button>
@@ -182,12 +185,62 @@ export async function mount(container) {
       };
     });
 
+    target.querySelectorAll('[data-emp-reset]').forEach((btn) => {
+      btn.onclick = () => {
+        const member = staff.find((m) => m.id === btn.dataset.empReset);
+        if (member) resetEmployeePassword(member);
+      };
+    });
+
     target.querySelectorAll('[data-emp-delete]').forEach((btn) => {
       btn.onclick = () => {
         const member = staff.find((m) => m.id === btn.dataset.empDelete);
         if (member) confirmDeleteEmployee(member);
       };
     });
+  }
+
+  // Shows a one-time temporary password with a Copy button (avoids typing mistakes)
+  function showCredentialsModal(title, fullName, email, password) {
+    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    Modal.open({
+      title,
+      content: `
+        <p style="margin-bottom:10px;">Share these sign-in details with <strong>${esc(fullName)}</strong>. The password is shown <strong>only once</strong>.</p>
+        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:6px; padding:12px; font-family:monospace; user-select:all;">
+          Email: ${esc(email)}<br/>
+          Temporary password: <strong>${esc(password)}</strong>
+        </div>
+        <button type="button" id="btn-copy-credentials" class="btn btn-outline btn-sm" style="margin-top:10px;">Copy details</button>
+        <p style="margin-top:10px; font-size:0.8rem; color:var(--text-muted);">Passwords are case-sensitive. Ask them to change it from their profile after the first sign-in.</p>
+      `,
+    });
+    setTimeout(() => {
+      const copyBtn = document.getElementById('btn-copy-credentials');
+      if (!copyBtn) return;
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(`Email: ${email}\nPassword: ${password}`);
+          Toast.success('Copied to clipboard.');
+        } catch (e) {
+          Toast.error('Could not copy. Select the text and copy it manually.');
+        }
+      };
+    }, 50);
+  }
+
+  // Generates a new temporary password for an employee (server-side, same company only)
+  async function resetEmployeePassword(member) {
+    if (member.id === globalState.user?.id) return;
+    if (!window.confirm(`Create a new temporary password for ${member.full_name || member.email}? Their current password will stop working.`)) return;
+    const { data, error } = await supabase.functions.invoke('staff-admin', {
+      body: { action: 'reset_password', id: member.id },
+    });
+    if (error || data?.error) {
+      Toast.error(data?.error || error.message || 'Could not reset the password.');
+      return;
+    }
+    showCredentialsModal('New temporary password', member.full_name || member.email, member.email, data.temp_password);
   }
 
   // Delete Employee Workflow
@@ -347,19 +400,7 @@ export async function mount(container) {
           Toast.success(`Employee "${payload.full_name}" added.`);
 
           // Show the one-time temporary password after this modal closes
-          setTimeout(() => {
-            Modal.open({
-              title: 'Employee created',
-              content: `
-                <p style="margin-bottom:10px;">Share these sign-in details with <strong>${payload.full_name.replace(/</g, '&lt;')}</strong>. The password is shown <strong>only once</strong>.</p>
-                <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:6px; padding:12px; font-family:monospace;">
-                  Email: ${payload.email.replace(/</g, '&lt;')}<br/>
-                  Temporary password: <strong>${String(data.temp_password).replace(/</g, '&lt;')}</strong>
-                </div>
-                <p style="margin-top:10px; font-size:0.8rem; color:var(--text-muted);">Ask them to change it from their profile after the first sign-in.</p>
-              `,
-            });
-          }, 200);
+          setTimeout(() => showCredentialsModal('Employee created', payload.full_name, payload.email, data.temp_password), 200);
         }
 
         await loadActiveTab();
