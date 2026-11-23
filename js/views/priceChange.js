@@ -3,7 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
-import { scoped } from '../tenant.js';
+import { scoped, NIL_UUID } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -242,7 +242,7 @@ export async function mount(container) {
   }
 
   async function openBulkPriceChangeModal() {
-    const { data: categories } = await supabase.from('categories').select('id, name').is('deleted_at', null).order('name');
+    const { data: categories } = await supabase.from('categories').select('id, name').eq('shop_id', globalState.activeShopId || NIL_UUID).is('deleted_at', null).order('name');
     const catOpts = `<option value="ALL">-- All Categories --</option>` + (categories || []).map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
 
     Modal.open({

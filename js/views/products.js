@@ -2,7 +2,7 @@ import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { Toast } from '../components/Toast.js';
-import { scoped } from '../tenant.js';
+import { scoped, NIL_UUID } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -204,7 +204,7 @@ export async function mount(container) {
     const initialBarcode = prod?.barcode || generateAutoBarcode();
 
     const [catRes, unitRes] = await Promise.all([
-      supabase.from('categories').select('id, name').is('deleted_at', null).order('name'),
+      supabase.from('categories').select('id, name').eq('shop_id', globalState.activeShopId || NIL_UUID).is('deleted_at', null).order('name'),
       supabase.from('measurement_units').select('id, name, short_code').eq('is_active', true).order('name'),
     ]);
 

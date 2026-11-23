@@ -3,7 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
-import { scoped } from '../tenant.js';
+import { scoped, NIL_UUID } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -219,8 +219,8 @@ export async function mount(container) {
     const isEdit = !!rate;
 
     const [{ data: products }, { data: tiers }] = await Promise.all([
-      supabase.from('products').select('id, name, retail_price').eq('is_active', true).is('deleted_at', null).order('name'),
-      supabase.from('pricing_tiers').select('id, name').is('deleted_at', null).order('name'),
+      supabase.from('products').select('id, name, retail_price').eq('shop_id', globalState.activeShopId || NIL_UUID).eq('is_active', true).is('deleted_at', null).order('name'),
+      supabase.from('pricing_tiers').select('id, name').eq('shop_id', globalState.activeShopId || NIL_UUID).is('deleted_at', null).order('name'),
     ]);
 
     if (!products || !products.length) {

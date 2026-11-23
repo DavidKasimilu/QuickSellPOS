@@ -3,7 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
-import { scoped } from '../tenant.js';
+import { scoped, NIL_UUID } from '../tenant.js';
 
 export async function mount(container) {
   let activeTab = 'roles'; // 'roles' | 'staff'
@@ -231,7 +231,7 @@ export async function mount(container) {
   async function openStaffAssignmentModal() {
     const [{ data: profiles }, { data: roles }] = await Promise.all([
       supabase.from('profiles').select('id, full_name, email').order('full_name'),
-      supabase.from('user_roles').select('id, role_name').is('deleted_at', null).order('role_name'),
+      supabase.from('user_roles').select('id, role_name').eq('shop_id', globalState.activeShopId || NIL_UUID).is('deleted_at', null).order('role_name'),
     ]);
 
     if (!profiles || !profiles.length) {

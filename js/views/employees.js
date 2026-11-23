@@ -214,23 +214,15 @@ export async function mount(container) {
         </form>
       `,
       onSubmit: async () => {
-        const { error } = await supabase.from('profiles').delete().eq('id', member.id);
-        if (error) {
-          // Fallback to soft-deactivation if foreign key constraints prevent hard delete
-          if (error.code === '23503') {
-            const { error: softErr } = await supabase
-              .from('profiles')
-              .update({ is_active: false, shop_id: null, updated_at: new Date().toISOString() })
-              .eq('id', member.id);
-            if (softErr) {
-              Toast.error(softErr.message);
-              return;
-            }
-            Toast.info('Employee had historical records; account deactivated & unassigned from shop.');
-          } else {
-            Toast.error(error.message);
-            return;
-          }
+        const { data, error } = await supabase.functions.invoke('staff-admin', {
+          body: { action: 'remove', id: member.id },
+        });
+        if (error || data?.error) {
+          Toast.error(data?.error || error.message || 'Could not remove this employee.');
+          return;
+        }
+        if (data?.mode === 'deactivated') {
+          Toast.info('Employee has sales history, so the account was deactivated and sign-in disabled.');
         } else {
           Toast.success(`Employee "${member.full_name || member.email}" deleted.`);
         }
@@ -268,7 +260,7 @@ export async function mount(container) {
           <div class="form-row" style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
               <label>Email Address</label>
-              <input type="email" name="email" required value="${member?.email || ''}" placeholder="cashier@store.com" />
+              <input type="email" name="email" required value="${member?.email || ''}" placeholder="cashier@store.com" ${isEdit ? 'readonly' : ''} />
             </div>
             <div class="form-group" style="flex:1;">
               <label>Phone Number</label>
@@ -325,36 +317,49 @@ export async function mount(container) {
           shop_id: formData.shop_id || null,
           commission_rate: parseFloat(formData.commission_rate) || 0,
           is_active: formData.is_active === 'on',
-          updated_at: new Date().toISOString(),
         };
 
+        if (payload.role !== 'admin' && !payload.shop_id) {
+          Toast.error('Choose a store branch for this employee (only admins can be company-wide).');
+          throw new Error('validation');
+        }
+
         if (isEdit) {
-          const { error } = await supabase.from('profiles').update(payload).eq('id', member.id);
+          const { email, ...editable } = payload; // login email is not editable here
+          const { error } = await supabase
+            .from('profiles')
+            .update({ ...editable, updated_at: new Date().toISOString() })
+            .eq('id', member.id);
           if (error) {
             Toast.error(error.message);
-            return;
+            throw new Error('save-failed');
           }
           Toast.success('Employee details updated.');
         } else {
-          // Check duplicate email before insert to provide a clear message
-          const { data: existing } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('email', payload.email)
-            .maybeSingle();
-
-          if (existing) {
-            Toast.error(`An employee with email "${payload.email}" already exists.`);
-            return;
-          }
-
-          // Let Postgres DEFAULT uuid_generate_v4() assign the UUID cleanly
-          const { error } = await supabase.from('profiles').insert([payload]);
-          if (error) {
-            Toast.error(error.message);
-            return;
+          // The login account AND the profile are created together on the server
+          const { data, error } = await supabase.functions.invoke('staff-admin', {
+            body: { action: 'create', ...payload },
+          });
+          if (error || data?.error) {
+            Toast.error(data?.error || error.message || 'Could not create the employee.');
+            throw new Error('create-failed');
           }
           Toast.success(`Employee "${payload.full_name}" added.`);
+
+          // Show the one-time temporary password after this modal closes
+          setTimeout(() => {
+            Modal.open({
+              title: 'Employee created',
+              content: `
+                <p style="margin-bottom:10px;">Share these sign-in details with <strong>${payload.full_name.replace(/</g, '&lt;')}</strong>. The password is shown <strong>only once</strong>.</p>
+                <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:6px; padding:12px; font-family:monospace;">
+                  Email: ${payload.email.replace(/</g, '&lt;')}<br/>
+                  Temporary password: <strong>${String(data.temp_password).replace(/</g, '&lt;')}</strong>
+                </div>
+                <p style="margin-top:10px; font-size:0.8rem; color:var(--text-muted);">Ask them to change it from their profile after the first sign-in.</p>
+              `,
+            });
+          }, 200);
         }
 
         await loadActiveTab();

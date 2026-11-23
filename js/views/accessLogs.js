@@ -34,7 +34,7 @@ export async function mount(container) {
     tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching system security audit trails...</p>`;
 
     let query = supabase
-      .from('user_access_logs')
+      .from('access_logs')
       .select('*, profiles(full_name, email), shops(name)')
       .order('created_at', { ascending: false });
 
@@ -71,7 +71,7 @@ export async function mount(container) {
         },
         { 
           label: 'Action Performed', 
-          key: 'action_type', 
+          key: 'event_type', 
           render: (type) => {
             const act = (type || 'login').toLowerCase();
             let badgeClass = 'badge badge-teal';
@@ -81,8 +81,8 @@ export async function mount(container) {
           } 
         },
         { label: 'Store Branch', key: 'shops', render: (s) => s?.name || 'Main Branch' },
-        { label: 'IP / Terminal Fingerprint', key: 'ip_address', render: (ip, row) => `<code>${ip || row.device_fingerprint || 'Localhost'}</code>` },
-        { label: 'Event Details', key: 'details', render: (d) => d || 'User access activity' },
+        { label: 'IP / Terminal Fingerprint', key: 'ip_address', render: (ip, row) => `<code>${ip || row.user_agent || 'Browser'}</code>` },
+        { label: 'Event Details', key: 'details', render: (d) => (d && typeof d === 'object' ? Object.entries(d).map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : v}`).join(' | ') : (d || 'User access activity')) },
         { label: 'Timestamp', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
       ],
       data: logs || [],

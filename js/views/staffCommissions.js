@@ -163,7 +163,7 @@ export async function mount(container) {
   async function renderCommissionLogsTable(target) {
     let query = supabase
       .from('staff_commission_logs')
-      .select('*, store_staff(full_name), orders(order_number), profiles(full_name)')
+      .select('*, store_staff(full_name), orders(receipt_no), profiles(full_name)')
       .order('created_at', { ascending: false });
 
     query = scoped(query);
@@ -178,7 +178,7 @@ export async function mount(container) {
       targetId: 'commission-table-content',
       columns: [
         { label: 'Staff Member', key: 'store_staff', render: (s) => `<strong>${s?.full_name || 'Staff'}</strong>` },
-        { label: 'Order #', key: 'orders', render: (o) => o?.order_number ? `<code>${o.order_number}</code>` : '-' },
+        { label: 'Order #', key: 'orders', render: (o) => o?.receipt_no ? `<code>${o.receipt_no}</code>` : '-' },
         { label: 'Sale Value', key: 'sale_amount', render: (v) => `${Number(v || 0).toLocaleString()} ${currency}` },
         { label: 'Earned Commission', key: 'commission_amount', render: (v) => `<strong style="color:var(--teal-600);">${Number(v || 0).toLocaleString()} ${currency}</strong>` },
         { label: 'Log Date', key: 'created_at', render: (d) => new Date(d).toLocaleString() },

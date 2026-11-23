@@ -3,7 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
-import { scoped } from '../tenant.js';
+import { scoped, NIL_UUID } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -92,8 +92,8 @@ export async function mount(container) {
   async function openGRNModal() {
     const [{ data: pos }, { data: suppliers }, { data: products }] = await Promise.all([
       supabase.from('purchase_orders').select('id, po_number, supplier_id').eq('shop_id', globalState.activeShopId),
-      supabase.from('suppliers').select('id, name').order('name'),
-      supabase.from('products').select('id, name, cost_price').eq('is_active', true).order('name')
+      supabase.from('suppliers').select('id, name').eq('shop_id', globalState.activeShopId || NIL_UUID).order('name'),
+      supabase.from('products').select('id, name, cost_price').eq('shop_id', globalState.activeShopId || NIL_UUID).eq('is_active', true).order('name')
     ]);
 
     const poOpts = `<option value="">-- Direct Receipt (No PO) --</option>` + 

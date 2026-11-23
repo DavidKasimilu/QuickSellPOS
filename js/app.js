@@ -283,6 +283,13 @@ function setupGlobalRealtime(shopId) {
     });
 }
 
+// When the user switches branch, move realtime + heartbeat to the new shop and re-render the view
+window.addEventListener('qs:shop-changed', (e) => {
+  setupGlobalRealtime(e.detail?.shopId);
+  try { DeviceTracker.pingHeartbeat(); } catch (err) { /* ignore */ }
+  navigate();
+});
+
 function tearDownRealtime() {
   if (realtimeChannel && supabase) {
     supabase.removeChannel(realtimeChannel);

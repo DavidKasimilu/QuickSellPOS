@@ -3,7 +3,7 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
-import { scoped } from '../tenant.js';
+import { scoped, NIL_UUID } from '../tenant.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -101,8 +101,8 @@ export async function mount(container) {
   // Create PRN Modal
   async function openPRNModal() {
     const [{ data: suppliers }, { data: products }] = await Promise.all([
-      supabase.from('suppliers').select('id, name').order('name'),
-      supabase.from('products').select('id, name, cost_price').eq('is_active', true).order('name')
+      supabase.from('suppliers').select('id, name').eq('shop_id', globalState.activeShopId || NIL_UUID).order('name'),
+      supabase.from('products').select('id, name, cost_price').eq('shop_id', globalState.activeShopId || NIL_UUID).eq('is_active', true).order('name')
     ]);
 
     if (!suppliers || !suppliers.length) {

@@ -171,8 +171,14 @@ export const globalState = {
         return false;
       }
     }
+    const previousShopId = this.activeShopId;
     this.activeShop = shop;
     this.activeShopId = shop?.id || null;
+    if (previousShopId && previousShopId !== this.activeShopId) {
+      // never keep another branch's cached rows around
+      ['products', 'categories', 'inventory', 'customers', 'orders', 'payments'].forEach((k) => { this[k] = []; });
+      window.dispatchEvent(new CustomEvent('qs:shop-changed', { detail: { shopId: this.activeShopId } }));
+    }
     // The shop is the single source of truth for currency (shared by every staff member and device)
     if (shop?.currency) {
       this.preferences = { ...this.preferences, currency: shop.currency };

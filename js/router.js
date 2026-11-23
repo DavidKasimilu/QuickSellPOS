@@ -77,77 +77,77 @@ const routes = {
   },
   '#purchase-orders': {
     title: 'Purchase Orders (PO)',
-    loader: () => import('./views/purchaseOrders.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/purchaseOrders.js'),
     navKey: 'purchase-orders',
   },
   '#goods-received-note': {
     title: 'Goods Received Note (GRN)',
-    loader: () => import('./views/goodsReceivedNotes.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/goodsReceivedNotes.js'),
     navKey: 'goods-received-note',
   },
   '#purchase-return-note': {
     title: 'Purchase Return Note (PRN)',
-    loader: () => import('./views/purchaseReturnNotes.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/purchaseReturnNotes.js'),
     navKey: 'purchase-return-note',
   },
   '#stock-adjustments': {
     title: 'Stock Adjustments (SA)',
-    loader: () => import('./views/stockAdjustments.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/stockAdjustments.js'),
     navKey: 'stock-adjustments',
   },
   '#transfer-of-goods': {
     title: 'Transfer of Goods (TOG)',
-    loader: () => import('./views/transferOfGoods.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/transferOfGoods.js'),
     navKey: 'transfer-of-goods',
   },
   '#inventory-counts': {
     title: 'Inventory Counts',
-    loader: () => import('./views/inventoryCounts.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/inventoryCounts.js'),
     navKey: 'inventory-counts',
   },
   '#productions': {
     title: 'Productions',
-    loader: () => import('./views/productions.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/productions.js'),
     navKey: 'productions',
   },
   '#suppliers': {
     title: 'Suppliers',
-    loader: () => import('./views/suppliers.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/suppliers.js'),
     navKey: 'suppliers',
   },
   '#supplier-credit-management': {
     title: 'Supplier Credit Management',
-    loader: () => import('./views/supplierCredit.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/supplierCredit.js'),
     navKey: 'supplier-credit-management',
   },
   '#inventory-history-report': {
     title: 'Inventory History Report',
-    loader: () => import('./views/inventoryReports.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/inventoryReports.js'),
     navKey: 'inventory-history-report',
   },
   '#inventory-expiry-report': {
     title: 'Inventory Expiry Report',
-    loader: () => import('./views/inventoryReports.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/inventoryReports.js'),
     navKey: 'inventory-expiry-report',
   },
   '#inventory-valuation-report': {
     title: 'Inventory Valuation Report',
-    loader: () => import('./views/inventoryReports.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/inventoryReports.js'),
     navKey: 'inventory-valuation-report',
   },
   '#inventory-summary-report': {
     title: 'Inventory Summary Report',
-    loader: () => import('./views/inventoryReports.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/inventoryReports.js'),
     navKey: 'inventory-summary-report',
   },
   '#backdate-inventory-report': {
     title: 'Backdate Inventory Report',
-    loader: () => import('./views/inventoryReports.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/inventoryReports.js'),
     navKey: 'backdate-inventory-report',
   },
   '#supplier-credit-settlements-report': {
     title: 'Supplier Credit Settlements Report',
-    loader: () => import('./views/inventoryReports.js').catch(() => import('./views/inventory.js')),
+    loader: () => import('./views/inventoryReports.js'),
     navKey: 'supplier-credit-settlements-report',
   },
 
@@ -159,44 +159,44 @@ const routes = {
   },
   '#loyalty': {
     title: 'Loyalty Program',
-    loader: () => import('./views/loyalty.js').catch(() => import('./views/customers.js')),
+    loader: () => import('./views/loyalty.js'),
     navKey: 'loyalty',
   },
   '#debtor-management': {
     title: 'Debtor Management',
-    loader: () => import('./views/debtorManagement.js').catch(() => import('./views/customers.js')),
+    loader: () => import('./views/debtorManagement.js'),
     navKey: 'debtor-management',
   },
   '#debtor': {
     title: 'Debtor',
-    loader: () => import('./views/debtorManagement.js').catch(() => import('./views/customers.js')),
+    loader: () => import('./views/debtorManagement.js'),
     navKey: 'debtor',
   },
   '#credit-settlements': {
     title: 'Credit Settlements',
-    loader: () => import('./views/creditSettlements.js').catch(() => import('./views/customers.js')),
+    loader: () => import('./views/creditSettlements.js'),
     navKey: 'credit-settlements',
   },
   '#settlement-by-payment-types': {
     title: 'Settlement by Payment Types',
-    loader: () => import('./views/creditSettlements.js').catch(() => import('./views/customers.js')),
+    loader: () => import('./views/creditSettlements.js'),
     navKey: 'settlement-by-payment-types',
   },
 
   // --- DISCOUNTS & PRICING ROUTES ---
   '#discount-plans': {
     title: 'Discount Plans',
-    loader: () => import('./views/discountPlans.js').catch(() => import('./views/promotions.js')),
+    loader: () => import('./views/discountPlans.js'),
     navKey: 'discount-plans',
   },
   '#pricing-plans': {
     title: 'Pricing Plans',
-    loader: () => import('./views/pricingPlans.js').catch(() => import('./views/promotions.js')),
+    loader: () => import('./views/pricingPlans.js'),
     navKey: 'pricing-plans',
   },
   '#price-change': {
     title: 'Price Change',
-    loader: () => import('./views/priceChanges.js').catch(() => import('./views/promotions.js')),
+    loader: () => import('./views/priceChange.js'),
     navKey: 'price-change',
   },
 
@@ -208,22 +208,22 @@ const routes = {
   },
   '#access-rights': {
     title: 'Access Rights & Roles',
-    loader: () => import('./views/accessRights.js').catch(() => import('./views/employees.js')),
+    loader: () => import('./views/accessRights.js'),
     navKey: 'access-rights',
   },
   '#other-staff': {
     title: 'Other Staff',
-    loader: () => import('./views/otherStaff.js').catch(() => import('./views/employees.js')),
+    loader: () => import('./views/otherStaff.js'),
     navKey: 'other-staff',
   },
   '#staff-commissions': {
     title: 'Staff Commissions',
-    loader: () => import('./views/staffCommissions.js').catch(() => import('./views/employees.js')),
+    loader: () => import('./views/staffCommissions.js'),
     navKey: 'staff-commissions',
   },
   '#access-logs': {
     title: 'Access Logs',
-    loader: () => import('./views/accessLogs.js').catch(() => import('./views/employees.js')),
+    loader: () => import('./views/accessLogs.js'),
     navKey: 'access-logs',
   },
 

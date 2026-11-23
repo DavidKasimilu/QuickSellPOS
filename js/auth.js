@@ -43,7 +43,12 @@ export const Auth = {
         },
       },
     });
-    if (error) throw error;
+    if (error) {
+      if (/database error saving new user/i.test(error.message || '')) {
+        throw new Error('We could not create this account. The email may already belong to a staff account or be registered - try signing in, or ask your administrator for an invitation.');
+      }
+      throw error;
+    }
     return data;
   },
 

@@ -104,7 +104,7 @@ export async function mount(container) {
   async function openStockTransferModal() {
     const [{ data: shops }, { data: products }] = await Promise.all([
       supabase.from('shops').select('id, name').order('name'),
-      supabase.from('products').select('id, name').eq('is_active', true).is('deleted_at', null).order('name')
+      supabase.from('products').select('id, name').eq('shop_id', globalState.activeShopId || NIL_UUID).eq('is_active', true).is('deleted_at', null).order('name')
     ]);
 
     if (!shops || shops.length < 2) {
