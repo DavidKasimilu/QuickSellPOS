@@ -126,7 +126,7 @@ export async function mount(container) {
             <th>Email / Phone</th>
             <th>Role</th>
             <th>Assigned Shop</th>
-            <th>POS PIN</th>
+            <th>PIN sign-in</th>
             <th>Commission</th>
             <th>Status</th>
             <th style="text-align:right;">Actions</th>
@@ -150,7 +150,7 @@ export async function mount(container) {
                     <span class="badge ${member.role === 'admin' ? 'badge-teal' : ''}">${(member.role || 'staff').toUpperCase()}</span>
                   </td>
                   <td>${member.shops?.name || 'All Locations'}</td>
-                  <td><code>${member.pos_pin ? '••••' : 'Not set'}</code></td>
+                  <td><span style="color:var(--text-muted); font-size:0.8rem;">${['cashier', 'staff'].includes(member.role) ? 'Available (set in Edit)' : 'Not offered'}</span></td>
                   <td>${member.commission_rate || 0}%</td>
                   <td>
                     ${
@@ -332,10 +332,18 @@ export async function mount(container) {
               </select>
             </div>
             <div class="form-group" style="flex:1;">
-              <label>POS Quick-Login PIN (4 Digits)</label>
-              <input type="text" name="pos_pin" maxlength="6" pattern="[0-9]{4,6}" inputmode="numeric" value="${member?.pos_pin || ''}" placeholder="e.g. 1234" />
+              <label>Sign-in PIN (4 digits, cashier/staff)</label>
+              <input type="password" name="pos_pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off" placeholder="${isEdit ? 'Leave blank to keep the current PIN' : 'Optional, e.g. 4829'}" />
+              <small style="color:var(--text-muted);">Lets them sign in to the mobile POS with email + PIN. Easy PINs like 1234 or 0000 are refused.</small>
             </div>
           </div>
+
+          ${isEdit ? '' : `
+          <div class="form-group">
+            <label>Password (optional)</label>
+            <input type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Leave blank to generate a temporary password (or when using PIN only)" />
+            <small style="color:var(--text-muted);">At least 8 characters. Give a password, a PIN, or both.</small>
+          </div>`}
 
           <div class="form-row" style="display:flex; gap:12px;">
             <div class="form-group" style="flex:1;">
@@ -366,11 +374,20 @@ export async function mount(container) {
           email: formData.email.trim().toLowerCase(),
           phone: formData.phone?.trim() || null,
           role: formData.role,
-          pos_pin: formData.pos_pin?.trim() || null,
           shop_id: formData.shop_id || null,
           commission_rate: parseFloat(formData.commission_rate) || 0,
           is_active: formData.is_active === 'on',
         };
+
+        const pin = (formData.pos_pin || '').trim();
+        if (pin && !/^\d{4}$/.test(pin)) {
+          Toast.error('The PIN must be exactly 4 digits.');
+          return false;
+        }
+        if (pin && !['cashier', 'staff'].includes(payload.role)) {
+          Toast.error('PIN sign-in is only available for cashier and staff accounts.');
+          return false;
+        }
 
         if (payload.role !== 'admin' && !payload.shop_id) {
           Toast.error('Choose a store branch for this employee (only admins can be company-wide).');
@@ -387,11 +404,20 @@ export async function mount(container) {
             Toast.error(error.message);
             return false;
           }
-          Toast.success('Employee details updated.');
+          if (pin) {
+            const { data: pinData, error: pinError } = await supabase.functions.invoke('staff-admin', {
+              body: { action: 'set_pin', id: member.id, pin },
+            });
+            if (pinError || pinData?.error) {
+              Toast.error(`Details saved, but the PIN was not changed: ${pinData?.error || pinError.message}`);
+              return false;
+            }
+          }
+          Toast.success(pin ? 'Employee details and PIN updated.' : 'Employee details updated.');
         } else {
           // The login account AND the profile are created together on the server
           const { data, error } = await supabase.functions.invoke('staff-admin', {
-            body: { action: 'create', ...payload },
+            body: { action: 'create', ...payload, pos_pin: pin || null, password: (formData.password || '') || null },
           });
           if (error || data?.error) {
             Toast.error(data?.error || error.message || 'Could not create the employee.');
@@ -399,8 +425,12 @@ export async function mount(container) {
           }
           Toast.success(`Employee "${payload.full_name}" added.`);
 
-          // Show the one-time temporary password after this modal closes
-          setTimeout(() => showCredentialsModal('Employee created', payload.full_name, payload.email, data.temp_password), 200);
+          // Only a generated password has to be shown (once). A password you typed, or a PIN-only account, does not.
+          if (data.temp_password) {
+            setTimeout(() => showCredentialsModal('Employee created', payload.full_name, payload.email, data.temp_password), 200);
+          } else if (data.pin_set && !data.password_set) {
+            Toast.info('PIN-only account: they sign in on the mobile POS with email + PIN.');
+          }
         }
 
         await loadActiveTab();
