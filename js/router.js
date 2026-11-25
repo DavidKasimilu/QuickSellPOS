@@ -226,6 +226,11 @@ const routes = {
     loader: () => import('./views/accessLogs.js'),
     navKey: 'access-logs',
   },
+  '#shifts': {
+    title: 'Shift Management',
+    loader: () => import('./views/shifts.js'),
+    navKey: 'shifts',
+  },
 
   // --- SETTINGS ROUTE ---
   '#settings': {
