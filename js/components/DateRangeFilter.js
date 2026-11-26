@@ -5,6 +5,12 @@
 // Dates are treated as LOCAL calendar days, not UTC, so "Today" always means today where the
 // person actually is (the old per-page filters used toISOString(), which rolls over at UTC
 // midnight - 3am in Nairobi - and showed the wrong day's figures for part of the day).
+//
+// The popover is appended to <body> and positioned with "position: fixed" from the toggle button's
+// on-screen location, instead of living inside the page's own layout. Several containers in this
+// app (.main-content, .top-bar) set "overflow: hidden" to control their own scrolling, which clips
+// any ordinary dropdown placed inside them. Rendering the popover at the body level (a "portal")
+// avoids that clipping no matter which page the control is used on.
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const todayStr = () => ymd(new Date());
@@ -24,36 +30,40 @@ export function mountDateRangeFilter(container, { initial, onChange } = {}) {
   let popoverOpen = false;
 
   container.innerHTML = `
-    <div class="qs-daterange" style="position:relative; display:inline-flex; gap:8px; align-items:center;">
+    <div class="qs-daterange" style="display:inline-flex; gap:8px; align-items:center;">
       <button type="button" class="date-chip" data-qs-today>Today</button>
       <button type="button" class="date-chip" data-qs-toggle style="display:inline-flex; align-items:center; gap:6px;">
         <i data-lucide="calendar" style="width:14px; height:14px;"></i><span data-qs-label>Today</span>
       </button>
-      <div data-qs-pop style="display:none; position:absolute; top:calc(100% + 8px); left:0; z-index:40; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.18); padding:14px; min-width:260px;">
-        <div style="display:flex; gap:10px; margin-bottom:10px;">
-          <div style="flex:1;">
-            <label style="display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); margin-bottom:4px;">FROM</label>
-            <input type="date" data-qs-start class="input-field" style="width:100%; padding:6px 8px; font-size:0.8125rem;" />
-          </div>
-          <div style="flex:1;">
-            <label style="display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); margin-bottom:4px;">TO</label>
-            <input type="date" data-qs-end class="input-field" style="width:100%; padding:6px 8px; font-size:0.8125rem;" />
-          </div>
-        </div>
-        <p style="font-size:0.72rem; color:var(--text-muted); margin:0 0 10px;">Leave "To" the same as "From" for a single day.</p>
-        <div style="display:flex; justify-content:flex-end; gap:8px;">
-          <button type="button" class="btn btn-outline btn-sm" data-qs-cancel>Cancel</button>
-          <button type="button" class="btn btn-teal-primary btn-sm" data-qs-apply>Apply</button>
-        </div>
-      </div>
     </div>`;
+
+  // The popover itself lives at the END of <body>, not inside `container` - see note above.
+  const pop = document.createElement('div');
+  pop.className = 'qs-daterange-pop';
+  pop.style.cssText = 'display:none; position:fixed; z-index:9000; background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.22); padding:14px; min-width:260px;';
+  pop.innerHTML = `
+    <div style="display:flex; gap:10px; margin-bottom:10px;">
+      <div style="flex:1;">
+        <label style="display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); margin-bottom:4px;">FROM</label>
+        <input type="date" data-qs-start style="width:100%; padding:6px 8px; font-size:0.8125rem;" />
+      </div>
+      <div style="flex:1;">
+        <label style="display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); margin-bottom:4px;">TO</label>
+        <input type="date" data-qs-end style="width:100%; padding:6px 8px; font-size:0.8125rem;" />
+      </div>
+    </div>
+    <p style="font-size:0.72rem; color:var(--text-muted); margin:0 0 10px;">Leave "To" the same as "From" for a single day.</p>
+    <div style="display:flex; justify-content:flex-end; gap:8px;">
+      <button type="button" class="btn btn-outline btn-sm" data-qs-cancel>Cancel</button>
+      <button type="button" class="btn btn-teal-primary btn-sm" data-qs-apply>Apply</button>
+    </div>`;
+  document.body.appendChild(pop);
 
   const todayBtn = container.querySelector('[data-qs-today]');
   const toggleBtn = container.querySelector('[data-qs-toggle]');
   const label = container.querySelector('[data-qs-label]');
-  const pop = container.querySelector('[data-qs-pop]');
-  const startInput = container.querySelector('[data-qs-start]');
-  const endInput = container.querySelector('[data-qs-end]');
+  const startInput = pop.querySelector('[data-qs-start]');
+  const endInput = pop.querySelector('[data-qs-end]');
 
   function fire() {
     const range = { start, end, label: start === end ? dayLabel(start) : `${dayLabel(start)} - ${dayLabel(end)}`, startISO: startOfDayISO(start), endISO: endOfDayISO(end) };
@@ -68,18 +78,40 @@ export function mountDateRangeFilter(container, { initial, onChange } = {}) {
     if (window.lucide) window.lucide.createIcons({ root: container });
   }
 
-  function closePopover() { pop.style.display = 'none'; popoverOpen = false; }
+  function positionPopover() {
+    const r = toggleBtn.getBoundingClientRect();
+    const popW = pop.offsetWidth || 280;
+    let left = r.left;
+    if (left + popW > window.innerWidth - 12) left = Math.max(12, window.innerWidth - popW - 12);
+    pop.style.top = `${r.bottom + 8}px`;
+    pop.style.left = `${left}px`;
+  }
+
+  function closePopover() {
+    pop.style.display = 'none';
+    popoverOpen = false;
+    window.removeEventListener('scroll', closeOnScroll, true);
+    window.removeEventListener('resize', positionPopover);
+  }
+  function closeOnScroll(e) {
+    if (pop.contains(e.target)) return;   // scrolling inside the popover itself is fine
+    closePopover();
+  }
   function openPopover() {
     startInput.value = start;
     endInput.value = end;
     pop.style.display = 'block';
     popoverOpen = true;
+    positionPopover();
+    // any scroll elsewhere on the page would leave the popover detached from the button, so close it
+    window.addEventListener('scroll', closeOnScroll, true);
+    window.addEventListener('resize', positionPopover);
   }
 
   todayBtn.onclick = () => { start = todayStr(); end = start; renderActiveState(); fire(); };
   toggleBtn.onclick = () => (popoverOpen ? closePopover() : openPopover());
-  container.querySelector('[data-qs-cancel]').onclick = closePopover;
-  container.querySelector('[data-qs-apply]').onclick = () => {
+  pop.querySelector('[data-qs-cancel]').onclick = closePopover;
+  pop.querySelector('[data-qs-apply]').onclick = () => {
     const s = startInput.value || todayStr();
     const e = endInput.value || s;
     if (s > e) { start = e; end = s; } else { start = s; end = e; }
@@ -88,7 +120,9 @@ export function mountDateRangeFilter(container, { initial, onChange } = {}) {
     fire();
   };
 
-  const onDocClick = (e) => { if (popoverOpen && !container.contains(e.target)) closePopover(); };
+  const onDocClick = (e) => {
+    if (popoverOpen && !pop.contains(e.target) && !container.contains(e.target)) closePopover();
+  };
   document.addEventListener('click', onDocClick);
 
   renderActiveState();
@@ -96,6 +130,10 @@ export function mountDateRangeFilter(container, { initial, onChange } = {}) {
   return {
     getRange: () => ({ start, end, label: start === end ? dayLabel(start) : `${dayLabel(start)} - ${dayLabel(end)}`, startISO: startOfDayISO(start), endISO: endOfDayISO(end) }),
     setRange(s, e = s) { start = s; end = e; renderActiveState(); },
-    destroy: () => document.removeEventListener('click', onDocClick),
+    destroy: () => {
+      document.removeEventListener('click', onDocClick);
+      closePopover();
+      pop.remove();
+    },
   };
 }
