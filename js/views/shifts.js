@@ -130,7 +130,7 @@ export async function mount(container) {
       targetId: 'shifts-table-content',
       columns: [
         {
-          label: '', key: 'id', sticky: 'left',
+          label: 'Actions', key: 'id', sticky: 'left',
           render: (id, row) => `
             <button class="btn btn-primary btn-sm" data-shift-view="${id}">View</button>
             ${row.status === 'open' && canClose ? `<button class="btn btn-outline btn-sm text-danger" data-shift-close="${id}" style="margin-left:6px;">Close</button>` : ''}`,
@@ -166,8 +166,20 @@ export async function mount(container) {
       ],
       data: rows,
     });
-    container.querySelectorAll('[data-shift-view]').forEach((b) => { b.onclick = () => openDetail(b.dataset.shiftView); });
-    container.querySelectorAll('[data-shift-close]').forEach((b) => { b.onclick = () => openClose(b.dataset.shiftClose); });
+  }
+
+  // One delegated listener for the whole table area: survives every re-render, and there is
+  // exactly one copy of it no matter how many times load()/renderTable() runs.
+  const tableArea = document.getElementById('shifts-table-content');
+  if (tableArea) {
+    tableArea.addEventListener('click', (e) => {
+      const viewBtn = e.target.closest('[data-shift-view]');
+      if (viewBtn) { openDetail(viewBtn.dataset.shiftView); return; }
+      const closeBtn = e.target.closest('[data-shift-close]');
+      if (closeBtn) openClose(closeBtn.dataset.shiftClose);
+    });
+  } else {
+    console.error('[Shifts] #shifts-table-content was not found - View/Close buttons will not respond.');
   }
 
   // ------------------------------------------------------------------ detail
