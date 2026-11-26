@@ -1,0 +1,10 @@
+# Supabase CLI project config. If you deploy functions with the CLI, this makes "Verify JWT" settings
+# explicit and repeatable across deploys (the dashboard's toggle can be easy to miss or to reset).
+# This file only takes effect when deploying via `supabase functions deploy` with a linked project;
+# it has no effect from the dashboard editor.
+
+[functions.pin-auth]
+verify_jwt = false   # callers are not signed in yet - this function authenticates them
+
+[functions.staff-admin]
+verify_jwt = true    # callers must already be a signed-in admin/manager

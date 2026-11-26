@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
 import { scoped } from '../tenant.js';
+import { mountDateRangeFilter, startOfDayISO, endOfDayISO } from '../components/DateRangeFilter.js';
 
 export async function mount(container) {
   const currency = globalState.preferences?.currency || 'KES';
@@ -99,128 +100,31 @@ export async function mount(container) {
     </div>
   `;
 
-  // Determine target ISO start and end timestamps based on user date selections
+  // Today by default; the calendar button lets the person pick a single day or a range.
+  let dateRange = null;   // {start,end,label,startISO,endISO} - set once the control mounts, below
+
   function getDateBounds() {
-    const period = globalState.datePeriod || 'today';
-    const now = new Date();
-    let startDate = new Date();
-    let endDate = new Date();
-    let label = 'Today';
-
-    if (period === 'today') {
-      label = 'Today';
-    } else if (period === 'yesterday') {
-      startDate.setDate(now.getDate() - 1);
-      endDate.setDate(now.getDate() - 1);
-      label = 'Yesterday';
-    } else if (period === 'this-month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      label = 'This Month';
-    } else if (period === 'last-month') {
-      startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      endDate = new Date(now.getFullYear(), now.getMonth(), 0);
-      label = 'Last Month';
-    } else if (period === 'range' && globalState.startDate && globalState.endDate) {
-      startDate = new Date(globalState.startDate);
-      endDate = new Date(globalState.endDate);
-      label = `${globalState.startDate} to ${globalState.endDate}`;
-    } else if (period === 'calendar' && globalState.filterDate) {
-      startDate = new Date(globalState.filterDate);
-      endDate = new Date(globalState.filterDate);
-      label = globalState.filterDate;
-    }
-
-    const startISO = `${startDate.toISOString().split('T')[0]}T00:00:00.000Z`;
-    const endISO = `${endDate.toISOString().split('T')[0]}T23:59:59.999Z`;
-
-    return { startISO, endISO, label };
+    return { startISO: dateRange.startISO, endISO: dateRange.endISO, label: dateRange.label };
   }
 
-  // Bind top navbar date filter controls
   function bindTopDateControls() {
-    const dateChips = document.querySelectorAll('#dashboard-date-controls .date-chip');
-    const monthSelect = document.getElementById('month-filter-select');
-    const startDateInput = document.getElementById('stats-start-date');
-    const endDateInput = document.getElementById('stats-end-date');
-    const calendarInput = document.getElementById('stats-calendar-filter');
-
-    // Handle Today / Yesterday chips
-    dateChips.forEach((chip) => {
-      const handler = (e) => {
-        dateChips.forEach((c) => c.classList.remove('active'));
-        e.target.classList.add('active');
-
-        if (monthSelect) monthSelect.value = '';
-        if (startDateInput) startDateInput.value = '';
-        if (endDateInput) endDateInput.value = '';
-        if (calendarInput) calendarInput.value = '';
-
-        globalState.datePeriod = e.target.dataset.period;
-        loadMetrics();
-      };
-      chip.addEventListener('click', handler);
-      eventListenersCleanup.push(() => chip.removeEventListener('click', handler));
+    const el = document.getElementById('dashboard-date-controls');
+    if (!el) return;
+    mountDateRangeFilter(el, {
+      onChange: (range) => { dateRange = range; loadMetrics(); },
     });
-
-    // Handle Month Select
-    if (monthSelect) {
-      const monthHandler = (e) => {
-        if (!e.target.value) return;
-        dateChips.forEach((c) => c.classList.remove('active'));
-        if (startDateInput) startDateInput.value = '';
-        if (endDateInput) endDateInput.value = '';
-        if (calendarInput) calendarInput.value = '';
-
-        globalState.datePeriod = e.target.value;
-        loadMetrics();
-      };
-      monthSelect.addEventListener('change', monthHandler);
-      eventListenersCleanup.push(() => monthSelect.removeEventListener('change', monthHandler));
-    }
-
-    // Handle Start & End Date Inputs
-    const rangeHandler = () => {
-      if (startDateInput?.value && endDateInput?.value) {
-        dateChips.forEach((c) => c.classList.remove('active'));
-        if (monthSelect) monthSelect.value = '';
-        if (calendarInput) calendarInput.value = '';
-
-        globalState.datePeriod = 'range';
-        globalState.startDate = startDateInput.value;
-        globalState.endDate = endDateInput.value;
-        loadMetrics();
-      }
+    dateRange = {
+      start: new Date().toISOString().slice(0, 10), // placeholder; mountDateRangeFilter sets the real local-day values below
     };
-
-    if (startDateInput && endDateInput) {
-      startDateInput.addEventListener('change', rangeHandler);
-      endDateInput.addEventListener('change', rangeHandler);
-      eventListenersCleanup.push(
-        () => startDateInput.removeEventListener('change', rangeHandler),
-        () => endDateInput.removeEventListener('change', rangeHandler)
-      );
-    }
-
-    // Handle Calendar Picker
-    if (calendarInput) {
-      const calendarHandler = (e) => {
-        if (!e.target.value) return;
-        dateChips.forEach((c) => c.classList.remove('active'));
-        if (monthSelect) monthSelect.value = '';
-        if (startDateInput) startDateInput.value = '';
-        if (endDateInput) endDateInput.value = '';
-
-        globalState.datePeriod = 'calendar';
-        globalState.filterDate = e.target.value;
-        loadMetrics();
-      };
-      calendarInput.addEventListener('change', calendarHandler);
-      eventListenersCleanup.push(() => calendarInput.removeEventListener('change', calendarHandler));
-    }
+    // mountDateRangeFilter defaults to "today" internally and does not fire onChange on mount,
+    // so read its current range once to get the first load's bounds.
+    const todayLocal = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const todayYmd = `${todayLocal.getFullYear()}-${pad(todayLocal.getMonth() + 1)}-${pad(todayLocal.getDate())}`;
+    dateRange = { start: todayYmd, end: todayYmd, label: 'Today', startISO: startOfDayISO(todayYmd), endISO: endOfDayISO(todayYmd) };
   }
 
-  // Fetch sales metrics from Supabase with shop-isolation and date filtering
+  // Fetch sales metrics from Supabase with shop-isolation and date filtering  // Fetch sales metrics from Supabase with shop-isolation and date filtering
   async function loadMetrics() {
     const { startISO, endISO, label } = getDateBounds();
 

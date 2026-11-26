@@ -4,6 +4,7 @@ import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
 import { Modal } from '../components/Modal.js';
 import { scoped } from '../tenant.js';
+import { mountDateRangeFilter } from '../components/DateRangeFilter.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 // LOCAL calendar date (toISOString would shift the day for users ahead of or behind UTC)
@@ -18,6 +19,7 @@ export async function mount(container) {
   let range = { from: ymd(today), to: ymd(today) };   // default: today only
   let status = 'all';
   let rows = [];
+  let dateRangeEnd;
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:12px;">
@@ -32,20 +34,11 @@ export async function mount(container) {
     </div>
 
     <div class="chart-box" style="padding:14px; margin-bottom:14px;">
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
-        <button class="btn btn-outline btn-sm" data-preset="today">Today</button>
-        <button class="btn btn-outline btn-sm" data-preset="yesterday">Yesterday</button>
-        <button class="btn btn-outline btn-sm" data-preset="7days">Last 7 days</button>
-        <button class="btn btn-outline btn-sm" data-preset="month">This month</button>
-      </div>
-      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
-        <div><label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">From</label>
-          <input type="date" id="shift-from" value="${range.from}" /></div>
-        <div><label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">To</label>
-          <input type="date" id="shift-to" value="${range.to}" /></div>
+      <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+        <div><label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">Period</label>
+          <div id="shift-daterange"></div></div>
         <div><label style="display:block; font-size:0.75rem; color:var(--text-muted); margin-bottom:4px;">Status</label>
           <select id="shift-status"><option value="all">All</option><option value="open">Open</option><option value="closed">Closed</option></select></div>
-        <button class="btn btn-primary" id="btn-shift-apply">Apply</button>
       </div>
     </div>
 
@@ -57,31 +50,10 @@ export async function mount(container) {
   `;
 
   // ------------------------------------------------------------------ date controls
-  const setRange = (from, to) => {
-    range = { from, to };
-    document.getElementById('shift-from').value = from;
-    document.getElementById('shift-to').value = to;
-    load();
-  };
-  container.querySelectorAll('[data-preset]').forEach((btn) => {
-    btn.onclick = () => {
-      const now = new Date();
-      const p = btn.dataset.preset;
-      if (p === 'today') setRange(ymd(now), ymd(now));
-      if (p === 'yesterday') { const y = new Date(now); y.setDate(y.getDate() - 1); setRange(ymd(y), ymd(y)); }
-      if (p === '7days') { const s = new Date(now); s.setDate(s.getDate() - 6); setRange(ymd(s), ymd(now)); }
-      if (p === 'month') setRange(ymd(new Date(now.getFullYear(), now.getMonth(), 1)), ymd(now));
-    };
+  mountDateRangeFilter(container.querySelector('#shift-daterange'), {
+    initial: { start: range.from, end: range.to },
+    onChange: (r) => { range = { from: r.start, to: r.end }; load(); },
   });
-  document.getElementById('btn-shift-apply').onclick = () => {
-    const from = document.getElementById('shift-from').value;
-    const to = document.getElementById('shift-to').value;
-    if (!from || !to) return Toast.error('Choose both dates.');
-    if (from > to) return Toast.error('The start date must be before the end date.');
-    range = { from, to };
-    status = document.getElementById('shift-status').value;
-    load();
-  };
   document.getElementById('shift-status').onchange = (e) => { status = e.target.value; load(); };
   document.getElementById('btn-shifts-refresh').onclick = () => load();
   document.getElementById('btn-shifts-export').onclick = exportCsv;
@@ -190,8 +162,8 @@ export async function mount(container) {
     const cur = esc(globalState.activeShop?.currency || globalState.preferences?.currency || 'KES');
 
     let ordersQ = supabase.from('orders')
-      .select('receipt_no, total, created_at, order_status, cashier:profiles!orders_cashier_id_fkey(full_name, email)')
-      .eq('shift_id', id).order('created_at', { ascending: false }).limit(200);
+      .select('id, receipt_no, total, created_at, order_status, is_deleted, cashier:profiles!orders_cashier_id_fkey(full_name, email)')
+      .eq('shift_id', id).order('created_at', { ascending: false }).limit(300);
     ordersQ = scoped(ordersQ);
     const { data: orders } = await ordersQ;
 
@@ -201,38 +173,100 @@ export async function mount(container) {
     const byMethod = {};
     (pays || []).forEach((p) => { byMethod[p.payment_method] = (byMethod[p.payment_method] || 0) + Number(p.amount || 0); });
 
+    // cash movements (deposits/withdrawals) and voided items during the shift window
+    const windowEnd = s.closed_at || new Date().toISOString();
+    let cashQ = supabase.from('cash_transactions')
+      .select('cashier_id, amount, action_type, note, created_at')
+      .eq('shop_id', s.shop_id).gte('created_at', s.opened_at).lte('created_at', windowEnd);
+    cashQ = scoped(cashQ);
+    const { data: cashMovesRaw } = await cashQ;
+
+    // cash_transactions.cashier_id points at the auth user, not a profiles row, so names are resolved separately
+    const cashierIds = [...new Set((cashMovesRaw || []).map((c) => c.cashier_id).filter(Boolean))];
+    let cashierNames = {};
+    if (cashierIds.length) {
+      let namesQ = supabase.from('profiles').select('id, full_name, email').in('id', cashierIds);
+      namesQ = scoped(namesQ);
+      const { data: names } = await namesQ;
+      cashierNames = Object.fromEntries((names || []).map((n) => [n.id, n]));
+    }
+    const cashMoves = (cashMovesRaw || []).map((c) => ({ ...c, cashier: cashierNames[c.cashier_id] }));
+
+    let voidQ = supabase.from('deleted_order_items')
+      .select('product_name, quantity, unit_price, reason, created_at, removed_by:profiles!deleted_order_items_removed_by_fkey(full_name, email)')
+      .eq('shop_id', s.shop_id).gte('created_at', s.opened_at).lte('created_at', windowEnd);
+    voidQ = scoped(voidQ);
+    const { data: voids } = await voidQ;
+
+    // one chronological activity feed: sales, cash movements, voided items
+    const activity = [
+      ...(orders || []).map((o) => ({
+        at: o.created_at, kind: o.is_deleted ? 'voided-sale' : 'sale',
+        text: `${o.is_deleted ? 'Voided sale' : 'Sale'} <code>${esc(o.receipt_no)}</code> by ${esc(o.cashier?.full_name || o.cashier?.email || 'Unknown')}`,
+        amount: o.is_deleted ? null : Number(o.total),
+      })),
+      ...(cashMoves || []).map((c) => ({
+        at: c.created_at, kind: c.action_type === 'in' ? 'cash-in' : 'cash-out',
+        text: `Cash ${c.action_type === 'in' ? 'added' : 'removed'} by ${esc(c.cashier?.full_name || c.cashier?.email || 'Unknown')}${c.note ? ` - ${esc(c.note)}` : ''}`,
+        amount: c.action_type === 'in' ? Number(c.amount) : -Number(c.amount),
+      })),
+      ...(voids || []).map((v) => ({
+        at: v.created_at, kind: 'voided-item',
+        text: `Removed ${esc(v.quantity)} x ${esc(v.product_name)} by ${esc(v.removed_by?.full_name || v.removed_by?.email || 'Unknown')}${v.reason ? ` - ${esc(v.reason)}` : ''}`,
+        amount: null,
+      })),
+    ].sort((a, b) => new Date(b.at) - new Date(a.at));
+
+    const colorFor = (kind) => ({ sale: 'var(--teal-600)', 'cash-in': 'var(--teal-600)', 'cash-out': 'var(--color-danger)', 'voided-sale': 'var(--color-danger)', 'voided-item': 'var(--color-danger)' }[kind] || 'inherit');
+
     const row = (l, v, strong) => `<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border-subtle); font-size:0.9rem;"><span style="color:var(--text-muted);">${l}</span><span style="${strong ? 'font-weight:700;' : ''}">${v}</span></div>`;
     Modal.open({
       title: `Shift ${esc(stamp(s.opened_at))}`,
       content: `
-        ${row('Status', s.status === 'open' ? 'OPEN' : 'CLOSED')}
-        ${row('Opened by', esc(s.opened_by_name || '-'))}
-        ${row('Closed by', esc(s.closed_by_name || '-'))}
-        ${row('Device', esc(String(s.opened_device || '-').slice(0, 60)))}
-        ${row('Opening cash', `${money(s.opening_cash)} ${cur}`)}
-        ${row('Orders', esc(t.orders_count ?? 0))}
-        ${row('Total sales', `${money(t.total_sales)} ${cur}`, true)}
-        ${Object.keys(byMethod).map((m) => row(`Paid by ${esc(m)}`, `${money(byMethod[m])} ${cur}`)).join('')}
-        ${row('On credit (unpaid)', `${money(t.credit_sales)} ${cur}`)}
-        ${row('Cash in / out', `${money(t.cash_in)} / ${money(t.cash_out)}`)}
-        ${row('Expected cash', `${money(s.expected_cash ?? t.expected_cash)} ${cur}`, true)}
-        ${s.actual_cash != null ? row('Counted cash', `${money(s.actual_cash)} ${cur}`) : ''}
-        ${s.cash_variance != null ? row('Difference', `${Number(s.cash_variance) > 0 ? '+' : ''}${money(s.cash_variance)} ${cur}`, true) : ''}
-        ${s.open_notes ? row('Opening note', esc(s.open_notes)) : ''}
-        ${s.close_notes ? row('Closing note', esc(s.close_notes)) : ''}
-        <h4 style="margin:16px 0 8px; font-size:0.9rem;">Sales in this shift (${(orders || []).length})</h4>
-        <div style="max-height:220px; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:6px;">
-          ${(orders || []).length ? `<table style="width:100%; font-size:0.82rem; border-collapse:collapse;">
-            ${(orders || []).map((o) => `<tr style="border-bottom:1px solid var(--border-subtle);">
-              <td style="padding:6px 8px;"><code>${esc(o.receipt_no)}</code></td>
-              <td style="padding:6px 8px;">${esc(new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</td>
-              <td style="padding:6px 8px;">${esc(o.cashier?.full_name || o.cashier?.email || '')}</td>
-              <td style="padding:6px 8px; text-align:right;"><strong>${money(o.total)}</strong></td></tr>`).join('')}
-          </table>` : '<p style="padding:12px; color:var(--text-muted); margin:0;">No sales yet.</p>'}
+        <!-- Summary -->
+        <div style="background:var(--bg-surface); border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+          ${row('Status', s.status === 'open' ? '<span class="badge badge-teal">OPEN</span>' : '<span class="badge">CLOSED</span>')}
+          ${row('Opened by', esc(s.opened_by_name || '-'))}
+          ${row('Closed by', esc(s.closed_by_name || '-'))}
+          ${row('Device', esc(String(s.opened_device || '-').slice(0, 60)))}
+          ${row('Duration', esc(formatDuration(s.opened_at, s.closed_at)))}
+          <div style="height:6px;"></div>
+          ${row('Opening cash', `${money(s.opening_cash)} ${cur}`)}
+          ${row('Orders', esc(t.orders_count ?? 0))}
+          ${row('Total sales', `${money(t.total_sales)} ${cur}`, true)}
+          ${Object.keys(byMethod).map((m) => row(`Paid by ${esc(m)}`, `${money(byMethod[m])} ${cur}`)).join('')}
+          ${row('On credit (unpaid)', `${money(t.credit_sales)} ${cur}`)}
+          ${row('Cash in / out', `${money(t.cash_in)} / ${money(t.cash_out)}`)}
+          ${row('Expected cash', `${money(s.expected_cash ?? t.expected_cash)} ${cur}`, true)}
+          ${s.actual_cash != null ? row('Counted cash', `${money(s.actual_cash)} ${cur}`) : ''}
+          ${s.cash_variance != null ? row('Difference', `${Number(s.cash_variance) > 0 ? '+' : ''}${money(s.cash_variance)} ${cur}`, true) : ''}
+          ${s.open_notes ? row('Opening note', esc(s.open_notes)) : ''}
+          ${s.close_notes ? row('Closing note', esc(s.close_notes)) : ''}
+        </div>
+
+        <!-- Activity -->
+        <h4 style="margin:0 0 8px; font-size:0.9rem;">Activity during this shift (${activity.length})</h4>
+        <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:6px;">
+          ${activity.length ? activity.map((a) => `
+            <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 10px; border-bottom:1px solid var(--border-subtle); font-size:0.82rem;">
+              <div>
+                <div>${a.text}</div>
+                <div style="font-size:0.72rem; color:var(--text-muted);">${esc(new Date(a.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</div>
+              </div>
+              ${a.amount != null ? `<div style="white-space:nowrap; font-weight:700; color:${colorFor(a.kind)};">${a.amount < 0 ? '-' : ''}${money(Math.abs(a.amount))}</div>` : ''}
+            </div>`).join('') : '<p style="padding:14px; color:var(--text-muted); margin:0;">No activity recorded.</p>'}
         </div>`,
     });
   }
 
+  function formatDuration(start, end) {
+    const ms = new Date(end || new Date()) - new Date(start);
+    const h = Math.floor(ms / 3600000);
+    const m = Math.round((ms % 3600000) / 60000);
+    return `${h}h ${m}m${end ? '' : ' (running)'}`;
+  }
+
+  // ------------------------------------------------------------------ close
   // ------------------------------------------------------------------ close (manager / admin)
   function openClose(id) {
     const r = rows.find((x) => x.id === id);

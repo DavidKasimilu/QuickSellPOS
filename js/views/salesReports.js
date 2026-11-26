@@ -7,18 +7,19 @@ import { PrinterDriver } from '../components/PrinterDriver.js';
 import { Exporter } from '../components/Exporter.js';
 import { PieChart } from '../components/PieChart.js';
 import { scoped, NIL_UUID } from '../tenant.js';
+import { mountDateRangeFilter, startOfDayISO, endOfDayISO } from '../components/DateRangeFilter.js';
 
 export async function mount(container, activeTab = 'sales-summary', queryParams = new URLSearchParams()) {
   const currency = globalState.preferences?.currency || 'KES';
   let unsubs = [];
 
-  // Calculate Accurate Initial Date Bounds (Default: This Month)
-  const now = new Date();
-  const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-  const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  // Default: Today. The calendar button next to it picks a single day or a range.
+  const todayLocal = new Date();
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const todayYmd = `${todayLocal.getFullYear()}-${pad2(todayLocal.getMonth() + 1)}-${pad2(todayLocal.getDate())}`;
 
-  let dateStart = firstDayOfMonth;
-  let dateEnd = lastDayOfMonth;
+  let dateStart = todayYmd;
+  let dateEnd = todayYmd;
   let selectedCustomerId = 'ALL';
   let selectedCashierId = 'ALL';
 
@@ -52,30 +53,10 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     <div class="card" style="padding: 16px; margin-bottom: 20px; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 10px;">
       <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between;">
         
-        <!-- Period & Date Range Controls -->
-        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
-          <div>
-            <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">PERIOD PRESET</label>
-            <div class="date-controls">
-              <button class="date-chip" data-preset="today">Today</button>
-              <button class="date-chip" data-preset="yesterday">Yesterday</button>
-              <button class="date-chip" data-preset="7days">7 Days</button>
-              <button class="date-chip active" data-preset="month">This Month</button>
-              <button class="date-chip" data-preset="last-month">Last Month</button>
-            </div>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <div>
-              <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">FROM</label>
-              <input type="date" id="filter-date-start" value="${dateStart}" class="input-field" style="padding: 5px 8px; font-size: 0.8125rem;" />
-            </div>
-            <span style="margin-top: 18px; color: var(--text-muted);">-</span>
-            <div>
-              <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">TO</label>
-              <input type="date" id="filter-date-end" value="${dateEnd}" class="input-field" style="padding: 5px 8px; font-size: 0.8125rem;" />
-            </div>
-          </div>
+        <!-- Date filter: Today by default, calendar button opens a single-day or range picker -->
+        <div>
+          <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">PERIOD</label>
+          <div id="sales-daterange"></div>
         </div>
 
         <!-- Customer & Staff Dropdown Selectors -->
@@ -172,47 +153,15 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   // Bind Preset Filter Chips
   const presetChips = container.querySelectorAll('[data-preset]');
-  const startInput = container.querySelector('#filter-date-start');
-  const endInput = container.querySelector('#filter-date-end');
   const custSelect = container.querySelector('#filter-customer-select');
   const cashierSelect = container.querySelector('#filter-cashier-select');
 
-  presetChips.forEach((chip) => {
-    chip.onclick = () => {
-      presetChips.forEach((c) => c.classList.remove('active'));
-      chip.classList.add('active');
-
-      const preset = chip.dataset.preset;
-      const today = new Date();
-
-      if (preset === 'today') {
-        dateStart = dateEnd = today.toISOString().split('T')[0];
-      } else if (preset === 'yesterday') {
-        const yest = new Date(today);
-        yest.setDate(yest.getDate() - 1);
-        dateStart = dateEnd = yest.toISOString().split('T')[0];
-      } else if (preset === '7days') {
-        const prev7 = new Date(today);
-        prev7.setDate(prev7.getDate() - 6);
-        dateStart = prev7.toISOString().split('T')[0];
-        dateEnd = today.toISOString().split('T')[0];
-      } else if (preset === 'month') {
-        dateStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-        dateEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
-      } else if (preset === 'last-month') {
-        dateStart = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
-        dateEnd = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
-      }
-
-      startInput.value = dateStart;
-      endInput.value = dateEnd;
-      loadView();
-    };
+  mountDateRangeFilter(container.querySelector('#sales-daterange'), {
+    initial: { start: dateStart, end: dateEnd },
+    onChange: (range) => { dateStart = range.start; dateEnd = range.end; loadView(); },
   });
 
   container.querySelector('#btn-apply-sales-filter').onclick = () => {
-    dateStart = startInput.value;
-    dateEnd = endInput.value;
     selectedCustomerId = custSelect.value;
     selectedCashierId = cashierSelect.value;
     loadView();
@@ -222,8 +171,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
 
   function applyBaseOrderFilters(query) {
     query = scoped(query);
-    if (dateStart) query = query.gte('created_at', `${dateStart}T00:00:00.000Z`);
-    if (dateEnd) query = query.lte('created_at', `${dateEnd}T23:59:59.999Z`);
+    if (dateStart) query = query.gte('created_at', startOfDayISO(dateStart));
+    if (dateEnd) query = query.lte('created_at', endOfDayISO(dateEnd));
     if (selectedCustomerId !== 'ALL') query = query.eq('customer_id', selectedCustomerId);
     if (selectedCashierId !== 'ALL') query = query.eq('cashier_id', selectedCashierId);
     return query;
@@ -511,8 +460,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   async function renderSalesByProduct(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, quantity, total, orders!inner(shop_id, created_at, customer_id, cashier_id, is_deleted)').eq('orders.is_deleted', false);
     query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
-    if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
-    if (dateEnd) query = query.lte('orders.created_at', `${dateEnd}T23:59:59.999Z`);
+    if (dateStart) query = query.gte('orders.created_at', startOfDayISO(dateStart));
+    if (dateEnd) query = query.lte('orders.created_at', endOfDayISO(dateEnd));
 
     const { data, error } = await query;
     if (error) {
@@ -552,8 +501,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   async function renderSalesByCategory(target, chartTarget) {
     let query = supabase.from('order_items').select('quantity, total, products(categories(name)), orders!inner(shop_id, created_at, is_deleted)').eq('orders.is_deleted', false);
     query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
-    if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
-    if (dateEnd) query = query.lte('orders.created_at', `${dateEnd}T23:59:59.999Z`);
+    if (dateStart) query = query.gte('orders.created_at', startOfDayISO(dateStart));
+    if (dateEnd) query = query.lte('orders.created_at', endOfDayISO(dateEnd));
 
     const { data, error } = await query;
     if (error) {
@@ -624,8 +573,8 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   async function renderSalesByPaymentType(target, chartTarget) {
     let query = supabase.from('payments').select('amount, payment_method, orders!inner(shop_id, created_at, customer_id, cashier_id)').eq('orders.is_deleted', false);
     query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
-    if (dateStart) query = query.gte('orders.created_at', `${dateStart}T00:00:00.000Z`);
-    if (dateEnd) query = query.lte('orders.created_at', `${dateEnd}T23:59:59.999Z`);
+    if (dateStart) query = query.gte('orders.created_at', startOfDayISO(dateStart));
+    if (dateEnd) query = query.lte('orders.created_at', endOfDayISO(dateEnd));
 
     const { data, error } = await query;
     if (error) {
