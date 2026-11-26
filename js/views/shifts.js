@@ -172,47 +172,68 @@ export async function mount(container) {
 
   // ------------------------------------------------------------------ detail
   async function openDetail(id) {
+    try {
+      await openDetailInner(id);
+    } catch (err) {
+      console.error('[Shifts] Could not open shift detail:', err);
+      Toast.error(err.message || 'Could not load this shift.');
+    }
+  }
+
+  async function openDetailInner(id) {
     const { data: s, error } = await supabase.rpc('shift_payload', { p_shift_id: id });
-    if (error || !s) return Toast.error(error?.message || 'Could not load this shift.');
+    if (error) throw new Error(error.message);
+    if (!s) throw new Error('This shift could not be found.');
     const t = s.totals || {};
     const cur = esc(globalState.activeShop?.currency || globalState.preferences?.currency || 'KES');
+
+    const windowEnd = s.closed_at || new Date().toISOString();
 
     let ordersQ = supabase.from('orders')
       .select('id, receipt_no, total, created_at, order_status, is_deleted, cashier:profiles!orders_cashier_id_fkey(full_name, email)')
       .eq('shift_id', id).order('created_at', { ascending: false }).limit(300);
     ordersQ = scoped(ordersQ);
-    const { data: orders } = await ordersQ;
 
     let payQ = supabase.from('payments').select('amount, payment_method, orders!inner(shift_id)').eq('orders.shift_id', id);
     payQ = scoped(payQ);
-    const { data: pays } = await payQ;
-    const byMethod = {};
-    (pays || []).forEach((p) => { byMethod[p.payment_method] = (byMethod[p.payment_method] || 0) + Number(p.amount || 0); });
 
-    // cash movements (deposits/withdrawals) and voided items during the shift window
-    const windowEnd = s.closed_at || new Date().toISOString();
     let cashQ = supabase.from('cash_transactions')
       .select('cashier_id, amount, action_type, note, created_at')
       .eq('shop_id', s.shop_id).gte('created_at', s.opened_at).lte('created_at', windowEnd);
     cashQ = scoped(cashQ);
-    const { data: cashMovesRaw } = await cashQ;
-
-    // cash_transactions.cashier_id points at the auth user, not a profiles row, so names are resolved separately
-    const cashierIds = [...new Set((cashMovesRaw || []).map((c) => c.cashier_id).filter(Boolean))];
-    let cashierNames = {};
-    if (cashierIds.length) {
-      let namesQ = supabase.from('profiles').select('id, full_name, email').in('id', cashierIds);
-      namesQ = scoped(namesQ);
-      const { data: names } = await namesQ;
-      cashierNames = Object.fromEntries((names || []).map((n) => [n.id, n]));
-    }
-    const cashMoves = (cashMovesRaw || []).map((c) => ({ ...c, cashier: cashierNames[c.cashier_id] }));
 
     let voidQ = supabase.from('deleted_order_items')
       .select('product_name, quantity, unit_price, reason, created_at, removed_by:profiles!deleted_order_items_removed_by_fkey(full_name, email)')
       .eq('shop_id', s.shop_id).gte('created_at', s.opened_at).lte('created_at', windowEnd);
     voidQ = scoped(voidQ);
-    const { data: voids } = await voidQ;
+
+    // one query failing (e.g. an unexpected relationship name on an older database) must not blank
+    // out the whole activity feed - run them independently and log whichever one failed
+    const [ordersRes, payRes, cashRes, voidRes] = await Promise.allSettled([ordersQ, payQ, cashQ, voidQ]);
+    const settled = (res, label) => {
+      if (res.status === 'rejected') { console.error(`[Shifts] ${label} query threw:`, res.reason); return []; }
+      if (res.value?.error) { console.error(`[Shifts] ${label} query error:`, res.value.error.message); return []; }
+      return res.value?.data || [];
+    };
+    const orders = settled(ordersRes, 'orders');
+    const pays = settled(payRes, 'payments');
+    const cashMovesRaw = settled(cashRes, 'cash_transactions');
+    const voids = settled(voidRes, 'deleted_order_items');
+
+    const byMethod = {};
+    pays.forEach((p) => { byMethod[p.payment_method] = (byMethod[p.payment_method] || 0) + Number(p.amount || 0); });
+
+    // cash_transactions.cashier_id points at the auth user, not a profiles row, so names are resolved separately
+    const cashierIds = [...new Set(cashMovesRaw.map((c) => c.cashier_id).filter(Boolean))];
+    let cashierNames = {};
+    if (cashierIds.length) {
+      let namesQ = supabase.from('profiles').select('id, full_name, email').in('id', cashierIds);
+      namesQ = scoped(namesQ);
+      const { data: names, error: namesErr } = await namesQ;
+      if (namesErr) console.error('[Shifts] profile name lookup error:', namesErr.message);
+      cashierNames = Object.fromEntries((names || []).map((n) => [n.id, n]));
+    }
+    const cashMoves = cashMovesRaw.map((c) => ({ ...c, cashier: cashierNames[c.cashier_id] }));
 
     // one chronological activity feed: sales, cash movements, voided items
     const activity = [
