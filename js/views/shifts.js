@@ -26,6 +26,7 @@ export async function mount(container) {
       <div style="display:flex; align-items:center; gap:12px;">
         <h3 style="margin:0; font-size:1.25rem; font-weight:600;">Shift Management</h3>
         <span class="badge badge-teal" id="shift-count-badge">0 shifts</span>
+        <span style="font-size:0.8rem; color:var(--text-muted);">Showing: <strong id="shift-range-label">Today</strong></span>
       </div>
       <div style="display:flex; gap:8px;">
         <button class="btn btn-outline" id="btn-shifts-export">Export CSV</button>
@@ -52,7 +53,12 @@ export async function mount(container) {
   // ------------------------------------------------------------------ date controls
   mountDateRangeFilter(container.querySelector('#shift-daterange'), {
     initial: { start: range.from, end: range.to },
-    onChange: (r) => { range = { from: r.start, to: r.end }; load(); },
+    onChange: (r) => {
+      range = { from: r.start, to: r.end };
+      const lbl = document.getElementById('shift-range-label');
+      if (lbl) lbl.textContent = r.label;
+      load();
+    },
   });
   document.getElementById('shift-status').onchange = (e) => { status = e.target.value; load(); };
   document.getElementById('btn-shifts-refresh').onclick = () => load();
@@ -123,29 +129,39 @@ export async function mount(container) {
     renderDataTable({
       targetId: 'shifts-table-content',
       columns: [
-        { label: 'Opened', key: 'opened_at', render: (d) => esc(stamp(d)) },
-        { label: 'Closed', key: 'closed_at', render: (d) => (d ? esc(stamp(d)) : '<span class="badge badge-teal">Running</span>') },
-        { label: 'Opened by', key: 'opener', render: (p) => esc(p?.full_name || p?.email || '-') },
-        { label: 'Closed by', key: 'closer', render: (p) => esc(p?.full_name || p?.email || '-') },
-        { label: 'Status', key: 'status', render: (s) => (s === 'open' ? '<span class="badge badge-teal">OPEN</span>' : '<span class="badge">CLOSED</span>') },
-        { label: 'Opening cash', key: 'opening_cash', align: 'right', render: (v) => money(v) },
-        { label: 'Orders', key: 'orders_count', align: 'right', render: (v) => esc(v ?? 0) },
-        { label: 'Total sales', key: 'total_sales', align: 'right', render: (v) => `<strong>${money(v)}</strong>` },
-        { label: 'Expected cash', key: 'expected_cash', align: 'right', render: (v) => (v == null ? '-' : money(v)) },
-        { label: 'Counted', key: 'actual_cash', align: 'right', render: (v) => (v == null ? '-' : money(v)) },
         {
-          label: 'Difference', key: 'cash_variance', align: 'right',
-          render: (v) => {
-            if (v == null) return '-';
-            const n = Number(v);
-            return `<span style="color:${n < 0 ? 'var(--color-danger)' : n > 0 ? 'var(--teal-600)' : 'inherit'}; font-weight:600;">${n > 0 ? '+' : ''}${money(n)}</span>`;
-          },
+          label: '', key: 'id', sticky: 'left',
+          render: (id, row) => `
+            <button class="btn btn-primary btn-sm" data-shift-view="${id}">View</button>
+            ${row.status === 'open' && canClose ? `<button class="btn btn-outline btn-sm text-danger" data-shift-close="${id}" style="margin-left:6px;">Close</button>` : ''}`,
+        },
+        { label: 'Status', key: 'status', render: (s) => (s === 'open' ? '<span class="badge badge-teal">OPEN</span>' : '<span class="badge">CLOSED</span>') },
+        { label: 'Opened', key: 'opened_at', render: (d) => esc(stamp(d)) },
+        {
+          label: 'Closed', key: 'closed_at',
+          render: (d, row) => (d ? esc(stamp(d)) : `<span class="badge badge-teal">Running</span>`),
         },
         {
-          label: '', key: 'id', align: 'right',
-          render: (id, row) => `
-            <button class="btn btn-outline btn-sm" data-shift-view="${id}">View</button>
-            ${row.status === 'open' && canClose ? `<button class="btn btn-outline btn-sm text-danger" data-shift-close="${id}" style="margin-left:6px;">Close</button>` : ''}`,
+          label: 'Staff', key: 'opener',
+          render: (opener, row) => `${esc(opener?.full_name || opener?.email || '-')}` +
+            (row.closer ? `<div style="font-size:0.75rem; color:var(--text-muted);">closed by ${esc(row.closer?.full_name || row.closer?.email || '-')}</div>` : ''),
+        },
+        { label: 'Orders', key: 'orders_count', align: 'right', render: (v) => esc(v ?? 0) },
+        { label: 'Total sales', key: 'total_sales', align: 'right', render: (v) => `<strong>${money(v)}</strong>` },
+        {
+          label: 'Cash (open./exp./count./diff.)', key: 'opening_cash', align: 'right',
+          render: (openingCash, row) => {
+            const parts = [money(openingCash)];
+            parts.push(row.expected_cash == null ? '-' : money(row.expected_cash));
+            parts.push(row.actual_cash == null ? '-' : money(row.actual_cash));
+            if (row.cash_variance != null) {
+              const n = Number(row.cash_variance);
+              parts.push(`<span style="color:${n < 0 ? 'var(--color-danger)' : n > 0 ? 'var(--teal-600)' : 'inherit'}; font-weight:600;">${n > 0 ? '+' : ''}${money(n)}</span>`);
+            } else {
+              parts.push('-');
+            }
+            return parts.join(' / ');
+          },
         },
       ],
       data: rows,
