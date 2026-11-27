@@ -5,6 +5,7 @@ import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
 import { Exporter } from '../components/Exporter.js';
 import { openReceiptDetail } from '../components/ReceiptViewer.js';
+import { renderShiftsPanel, openStartCloseModal } from './shifts.js';
 import { PieChart } from '../components/PieChart.js';
 import { scoped, NIL_UUID } from '../tenant.js';
 import { mountDateRangeFilter, startOfDayISO, endOfDayISO } from '../components/DateRangeFilter.js';
@@ -241,8 +242,26 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
             <i data-lucide="key-round" style="width:16px; height:16px; margin-right:6px;"></i> Start / Close Shift
           </button>
         `;
-        document.getElementById('btn-open-shift').onclick = () => openShiftModal();
-        await renderShiftsReport(tableArea, chartArea);
+        document.getElementById('btn-open-shift').onclick = () => openStartCloseModal({ onDone: () => loadView() });
+        await renderShiftsPanel(tableArea, {
+          from: dateStart,
+          to: dateEnd,
+          cashierId: selectedCashierId,
+          onRows: (rows) => {
+            currentReportData = rows;
+            currentReportColumns = [
+              { label: 'Cashier', key: 'staff' },
+              { label: 'Store', key: 'shop_name' },
+              { label: 'Opened At', key: 'opened_at' },
+              { label: 'Closed At', key: 'closed_at' },
+              { label: 'Opening Float', key: 'opening_cash' },
+              { label: 'Total Sales', key: 'total_sales' },
+              { label: 'Expected Cash', key: 'expected_cash' },
+              { label: 'Counted Cash', key: 'actual_cash' },
+              { label: 'Difference', key: 'cash_variance' },
+            ];
+          },
+        });
         break;
 
       case 'product-wise-receipts':
@@ -663,39 +682,6 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
     });
   }
 
-  async function renderShiftsReport(target, chartTarget) {
-    // FIXED: Shift staff foreign key
-    let query = supabase.from('shifts').select('*, staff:profiles!shifts_staff_id_fkey(full_name, email)').order('opened_at', { ascending: false });
-    query = scoped(query);
-
-    const { data: shifts, error } = await query;
-    if (error) {
-      target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
-      return;
-    }
-
-    currentReportData = shifts || [];
-    currentReportColumns = [
-      { label: 'Cashier', key: 'staff' },
-      { label: 'Opened At', key: 'opened_at' },
-      { label: 'Closed At', key: 'closed_at' },
-      { label: 'Opening Float', key: 'opening_cash' },
-      { label: 'Actual Cash', key: 'actual_cash' }
-    ];
-
-    renderDataTable({
-      targetId: 'sales-table-content',
-      columns: [
-        { label: 'Staff Member', key: 'staff', render: (p) => `<strong>${p?.full_name || 'Staff'}</strong>` },
-        { label: 'Opened At', key: 'opened_at', render: (d) => new Date(d).toLocaleString() },
-        { label: 'Closed At', key: 'closed_at', render: (d) => d ? new Date(d).toLocaleString() : '<span class="badge badge-teal">OPEN</span>' },
-        { label: 'Float', key: 'opening_cash', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
-        { label: 'Counted Cash', key: 'actual_cash', render: (v) => v !== null ? `${Number(v).toLocaleString()} ${currency}` : '-' },
-      ],
-      data: shifts || [],
-    });
-  }
-
   async function renderProductWiseReceipts(target, chartTarget) {
     let query = supabase.from('order_items').select('product_name, quantity, unit_price, total, orders!inner(receipt_no, created_at)').order('id', { ascending: false });
     query = query.eq('orders.shop_id', globalState.activeShopId || NIL_UUID);
@@ -1056,32 +1042,6 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   // Modal Views
-
-  function openShiftModal() {
-    Modal.open({
-      title: 'Open Cash Drawer Shift',
-      content: `
-        <form id="form-shift">
-          <div class="form-group">
-            <label>Opening Float (${currency})</label>
-            <input type="number" step="0.01" name="opening_cash" required placeholder="1000.00" class="input-field" />
-          </div>
-          <button type="submit" class="btn btn-teal-primary btn-block">Open Shift</button>
-        </form>
-      `,
-      onSubmit: async (fd) => {
-        await supabase.from('shifts').insert([{
-          shop_id: globalState.activeShopId,
-          staff_id: globalState.user?.id,
-          opening_cash: parseFloat(fd.opening_cash) || 0,
-          status: 'open',
-          opened_at: new Date().toISOString()
-        }]);
-        Toast.success('Shift opened.');
-        await loadView();
-      },
-    });
-  }
 
   // Initial View Load
   await loadView();
