@@ -198,7 +198,12 @@ export function mountDateRangeFilter(container, { initial, allowFuture = false, 
   const onDocClick = (e) => {
     if (popoverOpen && !pop.contains(e.target) && !container.contains(e.target)) closePopover();
   };
-  document.addEventListener('click', onDocClick);
+  // Capture phase: this must run BEFORE a click on a calendar day/prev/next/apply button, because
+  // those handlers rebuild the popover's contents (renderCalendar()) as part of handling the same
+  // click - which replaces the clicked element. In the bubble phase this check would then see a
+  // button that no longer exists in the popover and wrongly conclude the click was "outside" it,
+  // closing the popover immediately after every selection.
+  document.addEventListener('click', onDocClick, true);
 
   renderActiveState();
 
@@ -206,7 +211,7 @@ export function mountDateRangeFilter(container, { initial, allowFuture = false, 
     getRange: () => ({ start, end, label: start === end ? dayLabel(start) : `${dayLabel(start)} - ${dayLabel(end)}`, startISO: startOfDayISO(start), endISO: endOfDayISO(end) }),
     setRange(s, e = s) { start = s; end = e; renderActiveState(); },
     destroy: () => {
-      document.removeEventListener('click', onDocClick);
+      document.removeEventListener('click', onDocClick, true);
       closePopover();
       pop.remove();
     },

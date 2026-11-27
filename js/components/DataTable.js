@@ -1,4 +1,4 @@
-export function renderDataTable({ targetId, columns, data = [], onAction }) {
+export function renderDataTable({ targetId, columns, data = [], onAction, actionLabel = 'Edit' }) {
   const container = document.getElementById(targetId);
   if (!container) return;
 
@@ -12,8 +12,13 @@ export function renderDataTable({ targetId, columns, data = [], onAction }) {
     return;
   }
 
+  // A column with sticky:'left'|'right' stays pinned to that edge of the table while the rest
+  // scrolls horizontally - use it for an actions column in a wide table so it's never scrolled out
+  // of view. `background` keeps the pinned cell opaque over the rows scrolling beneath it.
+  const stickyStyle = (c) => (c.sticky ? `position:sticky; ${c.sticky}:0; background:var(--bg-card); z-index:1;` : '');
+
   const theadCols = columns
-    .map((c) => `<th style="${c.align ? `text-align:${c.align};` : ''}">${c.label}</th>`)
+    .map((c) => `<th style="${c.align ? `text-align:${c.align};` : ''} ${stickyStyle(c)}">${c.label}</th>`)
     .join('') + (onAction ? '<th style="text-align: right;">Actions</th>' : '');
 
   const tbodyRows = data
@@ -21,14 +26,14 @@ export function renderDataTable({ targetId, columns, data = [], onAction }) {
       const cells = columns
         .map((c) => {
           const val = c.render ? c.render(row[c.key], row) : (row[c.key] ?? '-');
-          return `<td style="${c.align ? `text-align:${c.align};` : ''}">${val}</td>`;
+          return `<td style="${c.align ? `text-align:${c.align};` : ''} ${stickyStyle(c)}">${val}</td>`;
         })
         .join('');
 
       const actionBtn = onAction
         ? `<td style="text-align: right;">
             <button class="btn btn-outline btn-sm" data-row-id="${row.id}" data-action="manage">
-              Edit
+              ${actionLabel}
             </button>
            </td>`
         : '';
