@@ -413,6 +413,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Status', key: 'order_status', render: (s) => `<span class="badge ${s === 'completed' ? 'badge-teal' : ''}">${s.toUpperCase()}</span>` },
       ],
       data: orders || [],
+      actionLabel: 'View',
       onAction: (a, id) => {
         const order = orders.find((o) => o.id === id);
         if (order) viewReceiptModal(order);
@@ -450,6 +451,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Refund Amount', key: 'total', render: (v) => `<span style="color:var(--color-danger); font-weight:600;">-${Number(v).toLocaleString()} ${currency}</span>` },
       ],
       data: refunds || [],
+      actionLabel: 'View',
       onAction: (a, id) => {
         const order = refunds.find((o) => o.id === id);
         if (order) viewReceiptModal(order);
@@ -789,6 +791,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Deleted At', key: 'deleted_at', render: (d) => d ? new Date(d).toLocaleString() : '-' },
       ],
       data: data || [],
+      actionLabel: 'View',
       onAction: (a, id) => {
         const order = data.find((o) => o.id === id);
         if (order) viewReceiptModal(order);
@@ -894,6 +897,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Synced At', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
       ],
       data: data || [],
+      actionLabel: 'View',
       onAction: (a, id) => {
         const order = data.find((o) => o.id === id);
         if (order) viewReceiptModal(order);
@@ -962,6 +966,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
         { label: 'Date', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
       ],
       data: data || [],
+      actionLabel: 'View',
       onAction: (a, id) => {
         const order = data.find((o) => o.id === id);
         if (order) viewReceiptModal(order);
