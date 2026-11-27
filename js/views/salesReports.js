@@ -3,8 +3,8 @@ import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
 import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
-import { PrinterDriver } from '../components/PrinterDriver.js';
 import { Exporter } from '../components/Exporter.js';
+import { openReceiptDetail } from '../components/ReceiptViewer.js';
 import { PieChart } from '../components/PieChart.js';
 import { scoped, NIL_UUID } from '../tenant.js';
 import { mountDateRangeFilter, startOfDayISO, endOfDayISO } from '../components/DateRangeFilter.js';
@@ -414,10 +414,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       ],
       data: orders || [],
       actionLabel: 'View',
-      onAction: (a, id) => {
-        const order = orders.find((o) => o.id === id);
-        if (order) viewReceiptModal(order);
-      },
+      onAction: (a, id) => openReceiptDetail(id),
     });
   }
 
@@ -452,10 +449,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       ],
       data: refunds || [],
       actionLabel: 'View',
-      onAction: (a, id) => {
-        const order = refunds.find((o) => o.id === id);
-        if (order) viewReceiptModal(order);
-      }
+      onAction: (a, id) => openReceiptDetail(id),
     });
   }
 
@@ -792,10 +786,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       ],
       data: data || [],
       actionLabel: 'View',
-      onAction: (a, id) => {
-        const order = data.find((o) => o.id === id);
-        if (order) viewReceiptModal(order);
-      }
+      onAction: (a, id) => openReceiptDetail(id),
     });
   }
 
@@ -898,10 +889,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       ],
       data: data || [],
       actionLabel: 'View',
-      onAction: (a, id) => {
-        const order = data.find((o) => o.id === id);
-        if (order) viewReceiptModal(order);
-      }
+      onAction: (a, id) => openReceiptDetail(id),
     });
   }
 
@@ -967,10 +955,7 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
       ],
       data: data || [],
       actionLabel: 'View',
-      onAction: (a, id) => {
-        const order = data.find((o) => o.id === id);
-        if (order) viewReceiptModal(order);
-      }
+      onAction: (a, id) => openReceiptDetail(id),
     });
   }
 
@@ -1071,70 +1056,6 @@ export async function mount(container, activeTab = 'sales-summary', queryParams 
   }
 
   // Modal Views
-  async function viewReceiptModal(order) {
-    const { data: items } = await supabase.from('order_items').select('*').eq('order_id', order.id);
-
-    const itemsRows = (items || []).map((i) => `
-      <tr>
-        <td style="padding:6px 0;">${i.product_name}</td>
-        <td style="text-align:right;">${i.quantity} x ${Number(i.unit_price).toLocaleString()}</td>
-        <td style="text-align:right; font-weight:600;">${Number(i.total).toLocaleString()} ${currency}</td>
-      </tr>
-    `).join('');
-
-    Modal.open({
-      title: `Receipt Details: ${order.receipt_no}`,
-      content: `
-        <div>
-          <div style="font-size:0.875rem; border-bottom:1px solid var(--border-subtle); padding-bottom:10px; margin-bottom:10px;">
-            <p><strong>Channel:</strong> ${(order.service_type || 'walk_in').toUpperCase()}</p>
-            <p><strong>Status:</strong> ${order.order_status.toUpperCase()}</p>
-            <p><strong>Subtotal:</strong> ${Number(order.subtotal).toLocaleString()} ${currency}</p>
-            <p><strong>Discount:</strong> -${Number(order.discount_amount).toLocaleString()} ${currency}</p>
-            <p><strong>Tax:</strong> ${Number(order.tax_amount).toLocaleString()} ${currency}</p>
-            <p style="font-size:1.05rem; font-weight:700; margin-top:6px;"><strong>Grand Total:</strong> ${Number(order.total).toLocaleString()} ${currency}</p>
-          </div>
-          <table style="width:100%; border-collapse:collapse; font-size:0.85rem; margin-bottom:16px;">
-            <tbody>${itemsRows}</tbody>
-          </table>
-          <div style="display:flex; gap:8px;">
-            <button id="btn-single-pdf" class="btn btn-outline" style="flex:1;">Export PDF</button>
-            <button id="btn-print-usb" class="btn btn-outline" style="flex:1;">WebUSB Print</button>
-            <button id="btn-print-bt" class="btn btn-outline" style="flex:1;">Bluetooth Print</button>
-            <button id="btn-print-fallback" class="btn btn-teal-primary" style="flex:1;">Slip Preview</button>
-          </div>
-        </div>
-      `,
-    });
-
-    const slipPayload = {
-      shopName: globalState.activeShop?.name || 'QuickSell POS',
-      receiptNo: order.receipt_no,
-      items: (items || []).map((i) => ({ name: i.product_name, quantity: i.quantity, price: Number(i.unit_price) })),
-      subtotal: Number(order.subtotal || 0),
-      discount: Number(order.discount_amount || 0),
-      tax: Number(order.tax_amount || 0),
-      total: Number(order.total || 0),
-      currency,
-    };
-
-    document.getElementById('btn-single-pdf').onclick = () => {
-      const pdfCols = [
-        { label: 'Item Name', key: 'product_name' },
-        { label: 'Quantity', key: 'quantity' },
-        { label: 'Unit Price', key: 'unit_price' },
-        { label: 'Total', key: 'total' }
-      ];
-      Exporter.exportToPDF(`Receipt ${order.receipt_no}`, items || [], pdfCols, {
-        'Receipt No': order.receipt_no,
-        'Total Amount': `${Number(order.total).toLocaleString()} ${currency}`
-      });
-    };
-
-    document.getElementById('btn-print-usb').onclick = () => PrinterDriver.printViaUSB(slipPayload);
-    document.getElementById('btn-print-bt').onclick = () => PrinterDriver.printViaBluetooth(slipPayload);
-    document.getElementById('btn-print-fallback').onclick = () => PrinterDriver.printFallbackSlip(slipPayload);
-  }
 
   function openShiftModal() {
     Modal.open({

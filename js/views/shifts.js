@@ -5,6 +5,7 @@ import { Toast } from '../components/Toast.js';
 import { Modal } from '../components/Modal.js';
 import { scoped } from '../tenant.js';
 import { mountDateRangeFilter } from '../components/DateRangeFilter.js';
+import { openReceiptDetail } from '../components/ReceiptViewer.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 // LOCAL calendar date (toISOString would shift the day for users ahead of or behind UTC)
@@ -29,6 +30,7 @@ export async function mount(container) {
         <span style="font-size:0.8rem; color:var(--text-muted);">Showing: <strong id="shift-range-label">Today</strong></span>
       </div>
       <div style="display:flex; gap:8px;">
+        <button class="btn btn-teal-primary" id="btn-start-close-shift">Start / Close Shift</button>
         <button class="btn btn-outline" id="btn-shifts-export">Export CSV</button>
         <button class="btn btn-outline" id="btn-shifts-refresh">Refresh</button>
       </div>
@@ -63,6 +65,7 @@ export async function mount(container) {
   document.getElementById('shift-status').onchange = (e) => { status = e.target.value; load(); };
   document.getElementById('btn-shifts-refresh').onclick = () => load();
   document.getElementById('btn-shifts-export').onclick = exportCsv;
+  document.getElementById('btn-start-close-shift').onclick = openStartCloseModal;
 
   // ------------------------------------------------------------------ data
   async function load() {
@@ -250,7 +253,7 @@ export async function mount(container) {
     // one chronological activity feed: sales, cash movements, voided items
     const activity = [
       ...(orders || []).map((o) => ({
-        at: o.created_at, kind: o.is_deleted ? 'voided-sale' : 'sale',
+        at: o.created_at, kind: o.is_deleted ? 'voided-sale' : 'sale', id: o.id,
         text: `${o.is_deleted ? 'Voided sale' : 'Sale'} <code>${esc(o.receipt_no)}</code> by ${esc(o.cashier?.full_name || o.cashier?.email || 'Unknown')}`,
         amount: o.is_deleted ? null : Number(o.total),
       })),
@@ -297,14 +300,19 @@ export async function mount(container) {
         <h4 style="margin:0 0 8px; font-size:0.9rem;">Activity during this shift (${activity.length})</h4>
         <div style="max-height:320px; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:6px;">
           ${activity.length ? activity.map((a) => `
-            <div style="display:flex; justify-content:space-between; gap:10px; padding:8px 10px; border-bottom:1px solid var(--border-subtle); font-size:0.82rem;">
+            <div class="${a.id ? 'qs-activity-row' : ''}" ${a.id ? `data-receipt-view="${a.id}" role="button" tabindex="0"` : ''} style="display:flex; justify-content:space-between; gap:10px; padding:8px 10px; border-bottom:1px solid var(--border-subtle); font-size:0.82rem; ${a.id ? 'cursor:pointer;' : ''}">
               <div>
-                <div>${a.text}</div>
+                <div>${a.text}${a.id ? ' <span style="color:var(--teal-600); font-size:0.72rem;">(view receipt)</span>' : ''}</div>
                 <div style="font-size:0.72rem; color:var(--text-muted);">${esc(new Date(a.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))}</div>
               </div>
               ${a.amount != null ? `<div style="white-space:nowrap; font-weight:700; color:${colorFor(a.kind)};">${a.amount < 0 ? '-' : ''}${money(Math.abs(a.amount))}</div>` : ''}
             </div>`).join('') : '<p style="padding:14px; color:var(--text-muted); margin:0;">No activity recorded.</p>'}
         </div>`,
+    });
+
+    // sales in the activity feed are clickable: open the same receipt view used in Sales Management
+    document.getElementById('global-modal')?.querySelectorAll('[data-receipt-view]').forEach((el) => {
+      el.onclick = () => openReceiptDetail(el.dataset.receiptView);
     });
   }
 
@@ -315,10 +323,139 @@ export async function mount(container) {
     return `${h}h ${m}m${end ? '' : ' (running)'}`;
   }
 
-  // ------------------------------------------------------------------ close
+  // ------------------------------------------------------------------ start / close (one shop at a time)
+  // "Start a shift" lists every store this admin/manager can open a shift in, marking ones that
+  // already have one running. "Close a shift" lists every currently open shift with its store name.
+  // Not scoped to the single active shop (unlike everything else on this page): an admin manages
+  // several stores, so BOTH lists are deliberately org-wide - relying on the shops/shifts RLS
+  // policies themselves (which already return every store the signed-in admin/manager may reach).
+  async function openStartCloseModal() {
+    Modal.open({
+      title: 'Start / Close Shift',
+      content: `
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+          <button type="button" id="sc-tab-start" class="btn btn-teal-primary" style="flex:1;">Start a shift</button>
+          <button type="button" id="sc-tab-close" class="btn btn-outline" style="flex:1;">Close a shift</button>
+        </div>
+        <div id="sc-body"><p style="color:var(--text-muted); font-size:0.85rem;">Loading...</p></div>
+      `,
+    });
+
+    const modalRoot = document.getElementById('global-modal');
+    const tabStart = modalRoot.querySelector('#sc-tab-start');
+    const tabClose = modalRoot.querySelector('#sc-tab-close');
+    const body = () => modalRoot.querySelector('#sc-body');
+
+    const setTab = (which) => {
+      tabStart.className = which === 'start' ? 'btn btn-teal-primary' : 'btn btn-outline';
+      tabStart.style.flex = '1';
+      tabClose.className = which === 'close' ? 'btn btn-teal-primary' : 'btn btn-outline';
+      tabClose.style.flex = '1';
+      if (which === 'start') renderStartTab(); else renderCloseTab();
+    };
+    tabStart.onclick = () => setTab('start');
+    tabClose.onclick = () => setTab('close');
+
+    async function renderStartTab() {
+      body().innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Loading your stores...</p>';
+
+      // Deliberately NOT using scoped(): this must list every store the admin manages, not just
+      // the one currently active in the sidebar. RLS (shops_select) already limits this correctly.
+      const [{ data: shops, error: shopsErr }, { data: openShifts, error: openErr }] = await Promise.all([
+        supabase.from('shops').select('id, name').order('name'),
+        supabase.from('shifts').select('shop_id').eq('status', 'open'),
+      ]);
+      if (shopsErr || openErr) {
+        body().innerHTML = `<p style="color:var(--color-danger);">${esc(shopsErr?.message || openErr?.message)}</p>`;
+        return;
+      }
+      const openShopIds = new Set((openShifts || []).map((s) => s.shop_id));
+      const available = (shops || []).filter((s) => !openShopIds.has(s.id));
+      const busy = (shops || []).filter((s) => openShopIds.has(s.id));
+
+      if (!shops || !shops.length) {
+        body().innerHTML = '<p style="color:var(--text-muted);">No stores found for your account.</p>';
+        return;
+      }
+
+      body().innerHTML = `
+        <div class="form-group"><label>Store</label>
+          <select id="sc-start-shop">
+            ${available.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}
+            ${busy.map((s) => `<option value="${s.id}" disabled>${esc(s.name)} (shift already open)</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group"><label>Opening cash</label>
+          <input type="number" id="sc-start-cash" min="0" step="0.01" value="0" /></div>
+        <div class="form-group"><label>Note (optional)</label>
+          <input type="text" id="sc-start-notes" maxlength="200" /></div>
+        ${!available.length ? '<p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:10px;">Every store already has an open shift.</p>' : ''}
+        <button type="button" id="sc-start-btn" class="btn btn-primary" style="width:100%;" ${!available.length ? 'disabled' : ''}>Start shift</button>
+      `;
+
+      body().querySelector('#sc-start-btn').onclick = async () => {
+        const btn = body().querySelector('#sc-start-btn');
+        const shopId = body().querySelector('#sc-start-shop').value;
+        const cash = parseFloat(body().querySelector('#sc-start-cash').value);
+        if (Number.isNaN(cash) || cash < 0) { Toast.error('Enter the opening cash (0 or more).'); return; }
+        btn.disabled = true; btn.textContent = 'Starting...';
+        const { data, error } = await supabase.rpc('open_shift', {
+          p_shop_id: shopId, p_opening_cash: cash,
+          p_notes: body().querySelector('#sc-start-notes').value.trim() || null,
+          p_device: 'Back office',
+        });
+        if (error) { Toast.error(error.message); btn.disabled = false; btn.textContent = 'Start shift'; return; }
+        Toast.success(data.created ? 'Shift started.' : 'A shift was already running for that store - joined it.');
+        Modal.close();
+        load();
+      };
+    }
+
+    async function renderCloseTab() {
+      body().innerHTML = '<p style="color:var(--text-muted); font-size:0.85rem;">Loading open shifts...</p>';
+
+      const { data: open, error } = await supabase
+        .from('shifts')
+        .select('id, shop_id, staff_id, opened_at, opening_cash, shops(name), opener:profiles!shifts_staff_id_fkey(full_name, email)')
+        .eq('status', 'open')
+        .order('opened_at', { ascending: false });
+      if (error) { body().innerHTML = `<p style="color:var(--color-danger);">${esc(error.message)}</p>`; return; }
+
+      if (!open || !open.length) {
+        body().innerHTML = '<p style="color:var(--text-muted);">No shifts are currently open.</p>';
+        return;
+      }
+
+      body().innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:8px; max-height:320px; overflow-y:auto;">
+          ${open.map((s) => `
+            <button type="button" class="chart-box" data-close-shift="${s.id}"
+              style="display:block; width:100%; text-align:left; padding:12px 14px; cursor:pointer; border:1px solid var(--border-subtle); background:var(--bg-card); font-family:inherit;">
+              <div style="font-weight:700;">${esc(s.shops?.name || 'Unknown store')}</div>
+              <div style="font-size:0.78rem; color:var(--text-muted);">
+                Opened ${esc(stamp(s.opened_at))} by ${esc(s.opener?.full_name || s.opener?.email || '-')}
+              </div>
+            </button>`).join('')}
+        </div>`;
+
+      body().querySelectorAll('[data-close-shift]').forEach((btn) => {
+        btn.onclick = () => openClose(btn.dataset.closeShift);
+      });
+    }
+
+    setTab('start');
+  }
+
   // ------------------------------------------------------------------ close (manager / admin)
-  function openClose(id) {
-    const r = rows.find((x) => x.id === id);
+  // Accepts a shift id that may or may not be in the currently-filtered `rows` (e.g. opened from the
+  // Start/Close Shift list, or while the page's own status filter is set to "Closed") - so the
+  // expected cash is always fetched fresh rather than assumed to already be loaded.
+  async function openClose(id) {
+    let r = rows.find((x) => x.id === id);
+    if (!r?.expected_cash && r?.expected_cash !== 0) {
+      const { data: live } = await supabase.rpc('shift_payload', { p_shift_id: id });
+      if (live) r = { ...r, expected_cash: live.totals?.expected_cash };
+    }
     const cur = esc(globalState.activeShop?.currency || globalState.preferences?.currency || 'KES');
     Modal.open({
       title: 'Close shift',
