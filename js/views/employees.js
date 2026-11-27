@@ -334,7 +334,7 @@ export async function mount(container) {
             <div class="form-group" style="flex:1;">
               <label>Sign-in PIN (4 digits, cashier/staff)</label>
               <input type="password" name="pos_pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off" placeholder="${isEdit ? 'Leave blank to keep the current PIN' : 'Optional, e.g. 4829'}" />
-              <small style="color:var(--text-muted);">Lets them sign in to the mobile POS with email + PIN. Easy PINs like 1234 or 0000 are refused.</small>
+              <small style="color:var(--text-muted);">Lets them sign in to the mobile POS with just their first name + PIN. Two employees in the same store who share a first name must have different PINs. Easy PINs like 1234 or 0000 are refused.</small>
             </div>
           </div>
 
@@ -429,7 +429,7 @@ export async function mount(container) {
           if (data.temp_password) {
             setTimeout(() => showCredentialsModal('Employee created', payload.full_name, payload.email, data.temp_password), 200);
           } else if (data.pin_set && !data.password_set) {
-            Toast.info('PIN-only account: they sign in on the mobile POS with email + PIN.');
+            Toast.info('PIN-only account: they sign in on the mobile POS with first name + PIN.');
           }
         }
 
