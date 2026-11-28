@@ -334,7 +334,7 @@ export async function mount(container) {
             <div class="form-group" style="flex:1;">
               <label>Sign-in PIN (4 digits)</label>
               <input type="password" name="pos_pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off" placeholder="${isEdit ? 'Leave blank to keep the current PIN' : 'Optional, e.g. 4829'}" />
-              <small style="color:var(--text-muted);">Lets them unlock the mobile POS lock screen with just this PIN. It must be different from every other employee's PIN in the store. Easy PINs like 1234 or 0000 are refused.</small>
+              <small style="color:var(--text-muted);">Easy PINs like 1234 or 0000 are refused.</small>
             </div>
           </div>
 
