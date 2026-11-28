@@ -41,7 +41,8 @@ export const globalState = {
   // Session & User
   user: null,
   profile: null,
-  role: null, // 'admin' | 'manager' | 'cashier' | 'staff'
+  role: null, // security tier: 'admin' | 'owner' | 'manager' | 'cashier' | 'staff'
+  accessRole: null, // the employee's role row (name, POS / back office access, rights); null before the roles migration
 
   // Active Store & Shift
   activeShopId: null,
@@ -252,6 +253,7 @@ export const globalState = {
     this.user = null;
     this.profile = null;
     this.role = null;
+    this.accessRole = null;
     this.activeShopId = null;
     this.activeShop = null;
     this.currentShift = null;
@@ -269,4 +271,4 @@ export const globalState = {
 
 // Initialize cached preferences on module load
 globalState.loadStoredPreferences();
-globalState.loadStoredFeatures();``
+globalState.loadStoredFeatures();

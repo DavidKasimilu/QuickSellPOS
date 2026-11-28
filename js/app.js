@@ -4,6 +4,8 @@ import { navigate } from './router.js';
 import { Toast } from './components/Toast.js';
 import { DeviceTracker } from './components/DeviceTracker.js';
 import { supabase } from './supabaseClient.js';
+import { hasRight } from './components/permissions.js';
+import { ROUTE_RIGHT, MENU_RIGHT } from './components/rights.js';
 
 let pendingAuthEmail = '';
 let realtimeChannel = null;
@@ -711,9 +713,28 @@ function updateTopBarUserMeta(state) {
   const emailEl = document.getElementById('user-email-label');
   const shopEl = document.getElementById('badge-active-shop');
 
-  if (roleEl) roleEl.textContent = (state.role || 'cashier').toUpperCase();
+  if (roleEl) roleEl.textContent = (state.accessRole?.name || state.role || 'cashier').toUpperCase();
+  applyMenuRights(state);
   if (emailEl) emailEl.textContent = state.user?.email || 'Unauthorized';
   if (shopEl) shopEl.textContent = state.activeShop?.name || 'Main Branch';
+}
+
+// Hide the menu icons and links the person's role has no right to open
+function applyMenuRights(state) {
+  if (!state?.user) return;
+
+  document.querySelectorAll('[data-menu-trigger]').forEach((btn) => {
+    const needed = MENU_RIGHT[btn.dataset.menuTrigger];
+    btn.classList.toggle('hidden', !!needed && !hasRight(needed));
+  });
+
+  const dashboardLink = document.querySelector('.sidebar-nav a[data-nav="dashboard"]');
+  if (dashboardLink) dashboardLink.classList.toggle('hidden', !hasRight('dashboard.view'));
+
+  document.querySelectorAll('.subnav-item[href], .subnav-subitem[href]').forEach((link) => {
+    const needed = ROUTE_RIGHT[(link.getAttribute('href') || '').split('?')[0]];
+    link.classList.toggle('hidden', !!needed && !hasRight(needed));
+  });
 }
 
 function bindGlobalNavActions() {

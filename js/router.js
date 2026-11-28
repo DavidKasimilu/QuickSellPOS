@@ -1,4 +1,6 @@
 import { globalState } from './state.js';
+import { hasRight } from './components/permissions.js';
+import { ROUTE_RIGHT, FALLBACK_ROUTES } from './components/rights.js';
 
 const salesTabTitles = {
   'sales-summary': 'Sales Summary',
@@ -299,6 +301,23 @@ export async function navigate() {
   }
 
   if (!viewport) return;
+
+  // 4b. Rights check: the page needs a right the person's role may not have
+  const neededRight = ROUTE_RIGHT[cleanHash] || (routes[cleanHash] ? null : ROUTE_RIGHT['#dashboard']);
+  if (globalState.user && neededRight && !hasRight(neededRight)) {
+    const fallback = FALLBACK_ROUTES.find((h) => h !== cleanHash && hasRight(ROUTE_RIGHT[h]));
+    if (fallback && cleanHash !== fallback && !(cleanHash === '' && fallback === '#dashboard')) {
+      window.location.hash = fallback;
+      return;
+    }
+    viewport.innerHTML = `
+      <div style="padding:32px; background:#fff; border:1px solid var(--border-subtle); border-radius:8px; max-width:520px;">
+        <h3 style="margin-bottom:8px;">No access</h3>
+        <p style="color:var(--text-muted); font-size:0.875rem;">Your role does not include the right to open this page. Ask an administrator to update your role.</p>
+      </div>
+    `;
+    return;
+  }
 
   // 5. Temporary Loading Indicator
   viewport.innerHTML = `

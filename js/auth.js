@@ -179,6 +179,26 @@ export const Auth = {
       return this.rejectSession('Account/store mismatch detected. Contact support.');
     }
 
+    // The employee's role (POS / back office access and rights). Missing before the roles migration:
+    // then the security tier alone decides, exactly as before.
+    let accessRole = null;
+    let roleId = profile.role_id;
+    if (!roleId) {
+      // company without role rows yet (new signup): create the system roles, then read the profile again
+      try { await supabase.rpc('ensure_access_roles'); } catch (e) { /* migration not applied yet */ }
+      const { data: fresh } = await supabase.from('profiles').select('role_id').eq('id', user.id).maybeSingle();
+      roleId = fresh?.role_id || null;
+    }
+    if (roleId) {
+      const { data: roleRow } = await supabase.from('access_roles').select('*').eq('id', roleId).is('deleted_at', null).maybeSingle();
+      accessRole = roleRow || null;
+    }
+    const isOrgAdmin = ['admin', 'owner'].includes(profile.role);
+    if (accessRole && accessRole.backoffice_access === false && !isOrgAdmin) {
+      return this.rejectSession('This account can only use the POS app. Sign in there with your PIN.');
+    }
+
+    globalState.accessRole = accessRole;
     globalState.setUser(user, profile);
     globalState.setActiveShop(shop);
     return globalState;
