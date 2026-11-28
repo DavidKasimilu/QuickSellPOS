@@ -150,7 +150,7 @@ export async function mount(container) {
                     <span class="badge ${member.role === 'admin' ? 'badge-teal' : ''}">${(member.role || 'staff').toUpperCase()}</span>
                   </td>
                   <td>${member.shops?.name || 'All Locations'}</td>
-                  <td><span style="color:var(--text-muted); font-size:0.8rem;">${['cashier', 'staff'].includes(member.role) ? 'Available (set in Edit)' : 'Not offered'}</span></td>
+                  <td><span style="color:var(--text-muted); font-size:0.8rem;">Available (set in Edit)</span></td>
                   <td>${member.commission_rate || 0}%</td>
                   <td>
                     ${
@@ -332,9 +332,9 @@ export async function mount(container) {
               </select>
             </div>
             <div class="form-group" style="flex:1;">
-              <label>Sign-in PIN (4 digits, cashier/staff)</label>
+              <label>Sign-in PIN (4 digits)</label>
               <input type="password" name="pos_pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off" placeholder="${isEdit ? 'Leave blank to keep the current PIN' : 'Optional, e.g. 4829'}" />
-              <small style="color:var(--text-muted);">Lets them sign in to the mobile POS with just their first name + PIN. Two employees in the same store who share a first name must have different PINs. Easy PINs like 1234 or 0000 are refused.</small>
+              <small style="color:var(--text-muted);">Lets them unlock the mobile POS lock screen with just this PIN. It must be different from every other employee's PIN in the store. Easy PINs like 1234 or 0000 are refused.</small>
             </div>
           </div>
 
@@ -384,10 +384,6 @@ export async function mount(container) {
           Toast.error('The PIN must be exactly 4 digits.');
           return false;
         }
-        if (pin && !['cashier', 'staff'].includes(payload.role)) {
-          Toast.error('PIN sign-in is only available for cashier and staff accounts.');
-          return false;
-        }
 
         if (payload.role !== 'admin' && !payload.shop_id) {
           Toast.error('Choose a store branch for this employee (only admins can be company-wide).');
@@ -429,7 +425,7 @@ export async function mount(container) {
           if (data.temp_password) {
             setTimeout(() => showCredentialsModal('Employee created', payload.full_name, payload.email, data.temp_password), 200);
           } else if (data.pin_set && !data.password_set) {
-            Toast.info('PIN-only account: they sign in on the mobile POS with first name + PIN.');
+            Toast.info('PIN-only account: they unlock the mobile POS lock screen with their PIN.');
           }
         }
 
