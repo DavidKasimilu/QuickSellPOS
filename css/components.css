@@ -969,3 +969,503 @@ input:focus, select:focus, textarea:focus {
   cursor: not-allowed;
   opacity: 0.55;
 }
+
+/* ==========================================================================
+   Employees & Roles pages
+   ========================================================================== */
+.page-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 20px 24px 8px;
+}
+
+.toolbar-icons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.toolbar-icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.toolbar-icon-btn:hover,
+.toolbar-icon-btn.active {
+  background: var(--teal-50);
+  color: var(--teal-600);
+}
+
+.toolbar-search {
+  height: 36px;
+  width: 220px;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  outline: none;
+  background: #fff;
+}
+
+.toolbar-search:focus {
+  border-color: var(--teal-600);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+}
+
+.column-menu {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  z-index: 25;
+  min-width: 190px;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  padding: 8px;
+}
+
+.column-menu label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  font-size: 0.875rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.column-menu label:hover {
+  background: var(--teal-50);
+}
+
+.row-clickable {
+  cursor: pointer;
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+  padding: 14px 24px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.table-footer select {
+  border: none;
+  background: transparent;
+  font-size: 0.8125rem;
+  color: var(--text-main);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pager-btn {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.pager-btn:disabled {
+  color: var(--text-subtle);
+  cursor: default;
+}
+
+.pager-btn:not(:disabled):hover {
+  background: var(--teal-50);
+  color: var(--teal-600);
+}
+
+/* on / off switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.switch-slider {
+  position: absolute;
+  inset: 0;
+  background: #cbd5e1;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.switch-slider::before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  top: 2px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+  transition: transform var(--transition-fast);
+}
+
+.switch input:checked + .switch-slider {
+  background: var(--teal-600);
+}
+
+.switch input:checked + .switch-slider::before {
+  transform: translateX(18px);
+}
+
+.switch input:disabled + .switch-slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.switch input:focus-visible + .switch-slider {
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.25);
+}
+
+/* stacked form cards (create / edit pages) */
+.form-page {
+  max-width: 680px;
+}
+
+.form-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 24px 28px;
+  margin-bottom: 16px;
+}
+
+.form-card h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-card .hint {
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.form-footer .footer-left {
+  margin-right: auto;
+  display: flex;
+  gap: 10px;
+}
+
+/* 4-digit PIN */
+.pin-boxes {
+  display: flex;
+  gap: 10px;
+}
+
+.pin-box {
+  width: 48px;
+  height: 52px;
+  text-align: center;
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pin-box:focus {
+  border-color: var(--teal-600);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+}
+
+.pin-boxes.invalid .pin-box {
+  border-color: var(--color-danger);
+}
+
+.pin-error {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  margin-bottom: 8px;
+}
+
+.pin-dialog-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--teal-50);
+  color: var(--teal-600);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* searchable role picker */
+.select-search {
+  position: relative;
+}
+
+.select-search-btn {
+  width: 100%;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  color: var(--text-main);
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.select-search-btn:focus-visible,
+.select-search.open .select-search-btn {
+  border-color: var(--teal-600);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.15);
+  outline: none;
+}
+
+.select-search-btn .placeholder {
+  color: var(--text-subtle);
+}
+
+.select-search-btn .label {
+  flex: 1;
+}
+
+.select-search-btn i,
+.select-search-btn svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.select-search-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 25;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+  padding: 8px;
+}
+
+.select-search-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  outline: none;
+  margin-bottom: 6px;
+}
+
+.select-search-input:focus {
+  border-color: var(--teal-600);
+}
+
+.select-search-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.select-search-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 0.875rem;
+  color: var(--text-main);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.select-search-option:hover,
+.select-search-option.selected {
+  background: var(--teal-50);
+}
+
+.select-search-option.create-link {
+  color: var(--teal-600);
+  font-weight: 600;
+}
+
+.select-search-empty {
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* access chips (POS / BACKOFFICE) */
+.access-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  margin-right: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-main);
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+}
+
+/* big on / off rows for POS and Back office on the role page */
+.access-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+}
+
+.access-toggle-row + .access-toggle-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.access-toggle-row strong {
+  display: block;
+  font-size: 1.0625rem;
+  margin-bottom: 4px;
+}
+
+.access-toggle-row span {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* rights table on the role page */
+.rights-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rights-table th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.rights-table th:first-child {
+  text-align: left;
+}
+
+.rights-table td {
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.rights-table td:first-child {
+  text-align: left;
+}
+
+.rights-table td small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+.rights-table input[type="checkbox"],
+.pos-right-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--teal-600);
+  cursor: pointer;
+}
+
+.rights-table input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.pos-right-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.notice-bar {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--teal-50);
+  border: 1px solid var(--teal-100);
+  color: var(--teal-700);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.8125rem;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+  .form-card { padding: 18px; }
+  .pin-box { width: 44px; height: 48px; }
+  .toolbar-search { width: 150px; }
+}

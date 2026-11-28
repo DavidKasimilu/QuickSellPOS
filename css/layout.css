@@ -673,3 +673,73 @@ svg.lucide, i[data-lucide] {
     min-width: 600px;
   }
 }
+
+/* ==========================================================================
+   Hover badges (tooltips) for the sidebar icons
+   Use data-tooltip="Text" on any sidebar icon.
+   ========================================================================== */
+.sidebar [data-tooltip] {
+  position: relative;
+}
+
+.sidebar [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translate(-4px, -50%);
+  background: #1e293b;
+  color: #ffffff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  padding: 9px 14px;
+  border-radius: 8px;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.28);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  z-index: calc(var(--z-subnav) + 10);
+}
+
+/* little arrow pointing at the icon */
+.sidebar [data-tooltip]::before {
+  content: '';
+  position: absolute;
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translate(-4px, -50%);
+  border: 6px solid transparent;
+  border-right-color: #1e293b;
+  border-left-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--transition-fast), transform var(--transition-fast), visibility var(--transition-fast);
+  z-index: calc(var(--z-subnav) + 10);
+}
+
+.sidebar [data-tooltip]:hover::after,
+.sidebar [data-tooltip]:hover::before,
+.sidebar [data-tooltip]:focus-visible::after,
+.sidebar [data-tooltip]:focus-visible::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(0, -50%);
+}
+
+/* no badges while a flyout menu is open (it would sit behind the panel) and on touch screens */
+body:has(#subnav-flyout:not(.hidden)) .sidebar [data-tooltip]::after,
+body:has(#subnav-flyout:not(.hidden)) .sidebar [data-tooltip]::before {
+  display: none;
+}
+
+@media (hover: none) {
+  .sidebar [data-tooltip]::after,
+  .sidebar [data-tooltip]::before {
+    display: none;
+  }
+}
