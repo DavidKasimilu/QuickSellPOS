@@ -1,683 +1,740 @@
 import { supabase } from '../supabaseClient.js';
 import { globalState } from '../state.js';
 import { Modal } from '../components/Modal.js';
-import { renderDataTable } from '../components/DataTable.js';
 import { Toast } from '../components/Toast.js';
 import { scoped } from '../tenant.js';
+import { hasRight, isAdmin } from '../components/permissions.js';
+import { fetchAccessRoles } from '../components/rights.js';
+import { pinBoxesHtml, bindPinBoxes, isWeakPin, PIN_HELP, ensureOwnPin } from '../components/PinInput.js';
 
-export async function mount(container) {
-  const currency = globalState.preferences.currency || 'KES';
-  let activeTab = 'employees'; // 'employees' | 'access-rights' | 'other-staff' | 'commissions' | 'access-logs'
+// ---------------------------------------------------------------------------
+// Employees
+//   #employees              the list
+//   #employees?new=1        create an employee
+//   #employees?edit=<id>    edit an employee
+// Roles live on their own page (Employees > Roles & permissions).
+// ---------------------------------------------------------------------------
 
-  container.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-      <div>
-        <span style="font-size:0.8125rem; color:var(--text-muted);">Manage staff accounts, roles, POS PINs, and commissions</span>
+const esc = (v) =>
+  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const TIER_LABEL = { admin: 'Administrator', owner: 'Administrator', manager: 'Manager', cashier: 'Cashier', staff: 'Cashier' };
+const TIER_ROLE_KEY = { admin: 'administrator', owner: 'administrator', manager: 'manager', cashier: 'cashier', staff: 'cashier' };
+
+// Used until the roles migration has been run: the old fixed roles
+const LEGACY_ROLES = [
+  { id: 'tier:cashier', name: 'Cashier', role_key: 'cashier', base_role: 'cashier', pos_access: true, backoffice_access: false, legacy: true },
+  { id: 'tier:manager', name: 'Manager', role_key: 'manager', base_role: 'manager', pos_access: true, backoffice_access: true, legacy: true },
+  { id: 'tier:admin', name: 'Administrator', role_key: 'administrator', base_role: 'admin', pos_access: true, backoffice_access: true, legacy: true },
+];
+
+function setTitle(text) {
+  const el = document.getElementById('current-view-title');
+  if (el) el.textContent = text;
+}
+
+async function loadRoles() {
+  const { roles } = await fetchAccessRoles();
+  return roles.length ? { roles, legacy: false } : { roles: LEGACY_ROLES, legacy: true };
+}
+
+function roleForMember(member, roles) {
+  if (!member) return null;
+  return (
+    roles.find((r) => r.id === member.role_id) ||
+    roles.find((r) => r.id === `tier:${member.role}`) ||
+    roles.find((r) => r.is_system && r.role_key === TIER_ROLE_KEY[member.role]) ||
+    roles.find((r) => r.role_key === TIER_ROLE_KEY[member.role]) ||
+    null
+  );
+}
+
+export async function mount(container, _tab, query) {
+  const editId = query?.get('edit') || null;
+  const isNew = query?.get('new') === '1';
+  if (isNew || editId) return mountForm(container, editId);
+  return mountList(container);
+}
+
+// ===========================================================================
+// Shared: one-time credentials dialog, password reset, delete
+// ===========================================================================
+function showCredentialsModal(title, fullName, email, password) {
+  Modal.open({
+    title,
+    content: `
+      <p style="margin-bottom:10px;">Share these sign-in details with <strong>${esc(fullName)}</strong>. The password is shown <strong>only once</strong>.</p>
+      <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:6px; padding:12px; font-family:monospace; user-select:all;">
+        Email: ${esc(email)}<br/>
+        Temporary password: <strong>${esc(password)}</strong>
       </div>
-      <div id="employees-action-container"></div>
-    </div>
-
-    <!-- Submenu Navigation Tabs -->
-    <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:20px; overflow-x:auto;">
-      <button class="date-chip active" data-emp-tab="employees">Employees</button>
-      <button class="date-chip" data-emp-tab="access-rights">Access Rights</button>
-      <button class="date-chip" data-emp-tab="other-staff">Other Staff</button>
-      <button class="date-chip" data-emp-tab="commissions">Staff Commissions</button>
-      <button class="date-chip" data-emp-tab="access-logs">Access Logs</button>
-    </div>
-
-    <div class="chart-box" style="padding:0;">
-      <div id="emp-table-content"></div>
-    </div>
-  `;
-
-  // Bind tab switching
-  container.querySelectorAll('[data-emp-tab]').forEach((btn) => {
-    btn.onclick = () => {
-      container.querySelectorAll('[data-emp-tab]').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      activeTab = btn.dataset.empTab;
-      loadActiveTab();
+      <button type="button" id="btn-copy-credentials" class="btn btn-outline btn-sm" style="margin-top:10px;">Copy details</button>
+      <p style="margin-top:10px; font-size:0.8rem; color:var(--text-muted);">This password is for the back office. On the POS they sign in with their 4-digit PIN. Passwords are case-sensitive; ask them to change it from their profile after the first sign-in.</p>
+    `,
+  });
+  setTimeout(() => {
+    const copyBtn = document.getElementById('btn-copy-credentials');
+    if (!copyBtn) return;
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(`Email: ${email}\nPassword: ${password}`);
+        Toast.success('Copied to clipboard.');
+      } catch (e) {
+        Toast.error('Could not copy. Select the text and copy it manually.');
+      }
     };
+  }, 50);
+}
+
+async function resetEmployeePassword(member) {
+  if (member.id === globalState.user?.id) return;
+  if (!window.confirm(`Create a new temporary password for ${member.full_name || member.email}? Their current password will stop working.`)) return;
+  const { data, error } = await supabase.functions.invoke('staff-admin', {
+    body: { action: 'reset_password', id: member.id },
+  });
+  if (error || data?.error) {
+    Toast.error(data?.error || error.message || 'Could not reset the password.');
+    return;
+  }
+  showCredentialsModal('New temporary password', member.full_name || member.email, member.email, data.temp_password);
+}
+
+function confirmDeleteEmployee(member, onDone) {
+  if (member.id === globalState.user?.id) {
+    Toast.error('You cannot delete your currently signed-in account.');
+    return;
+  }
+
+  Modal.open({
+    title: 'Delete employee',
+    content: `
+      <form id="form-employee-delete">
+        <p style="font-size:0.875rem; color:var(--text-main); margin-bottom:12px;">
+          Are you sure you want to remove <strong>${esc(member.full_name || member.email)}</strong> from your team?
+        </p>
+        <p style="font-size:0.8rem; color:var(--text-muted); background:var(--color-danger-bg); border:1px solid #fecaca; padding:10px 12px; border-radius:6px; margin-bottom:18px;">
+          This revokes their POS and back office access immediately. Past sales recorded under this employee stay intact for audit accuracy.
+        </p>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button type="button" class="btn btn-outline" id="btn-cancel-emp-del">Cancel</button>
+          <button type="submit" class="btn" style="background:var(--color-danger); color:#fff;">Delete employee</button>
+        </div>
+      </form>
+    `,
+    onSubmit: async () => {
+      const { data, error } = await supabase.functions.invoke('staff-admin', {
+        body: { action: 'remove', id: member.id },
+      });
+      if (error || data?.error) {
+        Toast.error(data?.error || error.message || 'Could not remove this employee.');
+        return;
+      }
+      if (data?.mode === 'deactivated') {
+        Toast.info('This employee has sales history, so the account was deactivated and sign-in disabled.');
+      } else {
+        Toast.success(`Employee "${member.full_name || member.email}" deleted.`);
+      }
+      if (onDone) onDone();
+    },
   });
 
-  async function loadActiveTab() {
-    const actionArea = document.getElementById('employees-action-container');
-    const tableArea = document.getElementById('emp-table-content');
-    if (!actionArea || !tableArea) return;
+  setTimeout(() => {
+    const cancelBtn = document.getElementById('btn-cancel-emp-del');
+    if (cancelBtn) cancelBtn.onclick = () => Modal.close();
+  }, 30);
+}
 
-    tableArea.innerHTML = `<p style="padding:24px; color:var(--text-muted);">Fetching ${activeTab} records...</p>`;
+// ===========================================================================
+// LIST
+// ===========================================================================
+async function mountList(container) {
+  setTitle('Employees');
+  const canManage = hasRight('employees.manage');
 
-    switch (activeTab) {
-      case 'employees':
-        actionArea.innerHTML = `
-          <button class="btn btn-teal-primary" id="btn-add-employee">
-            <i data-lucide="user-plus" style="width:16px; height:16px;"></i> Add Employee
-          </button>
-        `;
-        document.getElementById('btn-add-employee').onclick = () => openEmployeeModal(null);
-        await renderEmployeesTable(tableArea);
-        break;
+  const COLUMNS = [
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'role', label: 'Role' },
+    { key: 'shop', label: 'Shop' },
+    { key: 'pin', label: 'POS PIN' },
+    { key: 'commission', label: 'Commission' },
+    { key: 'status', label: 'Status' },
+  ];
+  const visible = new Set(['name', 'email', 'phone', 'role', 'shop', 'pin', 'status']);
 
-      case 'access-rights':
-        actionArea.innerHTML = `
-          <button class="btn btn-teal-primary" id="btn-sync-roles">
-            <i data-lucide="shield" style="width:16px; height:16px;"></i> Configure Matrix
-          </button>
-        `;
-        document.getElementById('btn-sync-roles').onclick = () => openRoleMatrixModal();
-        await renderAccessRightsTable(tableArea);
-        break;
+  let rows = [];
+  let roles = [];
+  let pinSet = null; // null = unknown (migration not applied)
+  let search = '';
+  let page = 1;
+  let perPage = 10;
 
-      case 'other-staff':
-        actionArea.innerHTML = `
-          <button class="btn btn-teal-primary" id="btn-add-aux">
-            <i data-lucide="user-plus" style="width:16px; height:16px;"></i> Add Auxiliary Staff
-          </button>
-        `;
-        document.getElementById('btn-add-aux').onclick = () => openAuxiliaryStaffModal();
-        await renderOtherStaffTable(tableArea);
-        break;
+  container.innerHTML = `
+    <div class="chart-box" style="padding:0;">
+      <div class="page-toolbar">
+        <div>
+          ${canManage ? '<button class="btn btn-teal-primary" id="btn-create-employee">Create employee</button>' : ''}
+        </div>
+        <div class="toolbar-icons">
+          <input type="search" class="toolbar-search hidden" id="emp-search" placeholder="Search employees" />
+          <button type="button" class="toolbar-icon-btn" id="emp-search-toggle" title="Search"><i data-lucide="search"></i></button>
+          <button type="button" class="toolbar-icon-btn" id="emp-refresh" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+          <button type="button" class="toolbar-icon-btn" id="emp-columns" title="Columns"><i data-lucide="columns-3"></i></button>
+          <div class="column-menu hidden" id="emp-column-menu">
+            ${COLUMNS.map(
+              (c) => `<label><input type="checkbox" data-col="${c.key}" ${visible.has(c.key) ? 'checked' : ''} /> ${c.label}</label>`
+            ).join('')}
+          </div>
+        </div>
+      </div>
+      <div id="emp-table" style="overflow-x:auto;"></div>
+      <div class="table-footer" id="emp-footer"></div>
+    </div>
+  `;
+  if (window.lucide) window.lucide.createIcons({ root: container });
 
-      case 'commissions':
-        actionArea.innerHTML = ``;
-        await renderCommissionsReport(tableArea);
-        break;
+  const tableEl = container.querySelector('#emp-table');
+  const footerEl = container.querySelector('#emp-footer');
+  const searchEl = container.querySelector('#emp-search');
+  const menuEl = container.querySelector('#emp-column-menu');
 
-      case 'access-logs':
-        actionArea.innerHTML = ``;
-        await renderAccessLogsTable(tableArea);
-        break;
+  // ---- toolbar -------------------------------------------------------------
+  const createBtn = container.querySelector('#btn-create-employee');
+  if (createBtn) {
+    createBtn.onclick = async () => {
+      // First time: everyone who adds employees needs a PIN of their own first
+      if (!(await ensureOwnPin())) return;
+      window.location.hash = '#employees?new=1';
+    };
+  }
+
+  container.querySelector('#emp-search-toggle').onclick = () => {
+    searchEl.classList.toggle('hidden');
+    if (!searchEl.classList.contains('hidden')) searchEl.focus();
+    else { search = ''; searchEl.value = ''; page = 1; render(); }
+  };
+  searchEl.oninput = () => { search = searchEl.value.trim().toLowerCase(); page = 1; render(); };
+  container.querySelector('#emp-refresh').onclick = () => load();
+
+  container.querySelector('#emp-columns').onclick = (e) => {
+    e.stopPropagation();
+    menuEl.classList.toggle('hidden');
+  };
+  menuEl.onclick = (e) => e.stopPropagation();
+  menuEl.querySelectorAll('[data-col]').forEach((cb) => {
+    cb.onchange = () => {
+      if (cb.checked) visible.add(cb.dataset.col);
+      else visible.delete(cb.dataset.col);
+      if (!visible.size) { visible.add('name'); cb.checked = cb.dataset.col === 'name'; }
+      render();
+    };
+  });
+  const closeMenu = () => menuEl.classList.add('hidden');
+  document.addEventListener('click', closeMenu);
+
+  // ---- data ----------------------------------------------------------------
+  async function load() {
+    tableEl.innerHTML = '<p style="padding:24px; color:var(--text-muted);">Loading employees...</p>';
+
+    let q = supabase.from('profiles').select('*, shops(name)').order('full_name');
+    if (!isAdmin()) q = scoped(q); // administrators see the whole company, everyone else their own shop
+
+    const [staffRes, rolesRes, pinRes] = await Promise.all([q, loadRoles(), supabase.rpc('staff_pin_status')]);
+
+    if (staffRes.error) {
+      tableEl.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${esc(staffRes.error.message)}</p>`;
+      footerEl.innerHTML = '';
+      return;
+    }
+    rows = staffRes.data || [];
+    roles = rolesRes.roles;
+    pinSet = pinRes.error ? null : new Set(pinRes.data || []);
+    render();
+  }
+
+  // ---- table ---------------------------------------------------------------
+  function render() {
+    const filtered = rows.filter((m) => {
+      if (!search) return true;
+      const roleName = roleForMember(m, roles)?.name || '';
+      return [m.full_name, m.email, m.phone, roleName].some((v) => String(v || '').toLowerCase().includes(search));
+    });
+
+    if (!filtered.length) {
+      tableEl.innerHTML = `
+        <div style="padding:48px 24px; text-align:center; color:var(--text-subtle);">
+          <p style="font-size:0.9rem; margin-bottom:8px;">${search ? 'No employees match your search.' : 'No employees yet.'}</p>
+          ${!search && canManage ? '<button class="btn btn-teal-primary btn-sm" id="btn-empty-add">Create the first employee</button>' : ''}
+        </div>`;
+      footerEl.innerHTML = '';
+      const emptyBtn = tableEl.querySelector('#btn-empty-add');
+      if (emptyBtn) emptyBtn.onclick = () => createBtn && createBtn.click();
+      return;
     }
 
+    const pages = Math.max(1, Math.ceil(filtered.length / perPage));
+    page = Math.min(page, pages);
+    const slice = filtered.slice((page - 1) * perPage, page * perPage);
+    const cols = COLUMNS.filter((c) => visible.has(c.key));
+
+    const cell = (m, key) => {
+      const role = roleForMember(m, roles);
+      const isSelf = m.id === globalState.user?.id;
+      switch (key) {
+        case 'name':
+          return `<strong>${esc(m.full_name || 'Unnamed')}</strong>${isSelf ? ' <span class="badge badge-teal" style="margin-left:6px;">YOU</span>' : ''}`;
+        case 'email':
+          return esc(m.email || '-');
+        case 'phone':
+          return esc(m.phone || '-');
+        case 'role':
+          return esc(role?.name || TIER_LABEL[m.role] || m.role || '-');
+        case 'shop':
+          return esc(m.shops?.name || 'All shops');
+        case 'pin': {
+          if (role && role.pos_access === false) return '<span style="color:var(--text-subtle);">Not used</span>';
+          if (pinSet === null) return '<span style="color:var(--text-subtle);">-</span>';
+          return pinSet.has(m.id)
+            ? '<span class="badge badge-teal">PIN set</span>'
+            : '<span class="badge" style="background:#fef3c7; color:#b45309; border-color:#fde68a;">No PIN</span>';
+        }
+        case 'commission':
+          return `${Number(m.commission_rate || 0)}%`;
+        case 'status':
+          return `<label class="switch" title="${m.is_active !== false ? 'Active' : 'Inactive'}">
+                    <input type="checkbox" data-toggle="${m.id}" ${m.is_active !== false ? 'checked' : ''} ${isSelf || !canManage ? 'disabled' : ''} />
+                    <span class="switch-slider"></span>
+                  </label>`;
+        default:
+          return '';
+      }
+    };
+
+    tableEl.innerHTML = `
+      <table class="data-table">
+        <thead><tr>${cols.map((c) => `<th>${c.label}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${slice
+            .map(
+              (m) => `<tr class="${canManage ? 'row-clickable' : ''}" data-row="${m.id}">
+                ${cols.map((c) => `<td>${cell(m, c.key)}</td>`).join('')}
+              </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>`;
+
+    footerEl.innerHTML = `
+      <span>Per page
+        <select id="emp-per-page">
+          ${[10, 25, 50].map((n) => `<option value="${n}" ${n === perPage ? 'selected' : ''}>${n}</option>`).join('')}
+        </select>
+      </span>
+      <span>Page ${page} of ${pages}</span>
+      <span>
+        <button class="pager-btn" id="emp-prev" ${page <= 1 ? 'disabled' : ''} title="Previous page"><i data-lucide="chevron-left"></i></button>
+        <button class="pager-btn" id="emp-next" ${page >= pages ? 'disabled' : ''} title="Next page"><i data-lucide="chevron-right"></i></button>
+      </span>`;
+
+    footerEl.querySelector('#emp-per-page').onchange = (e) => { perPage = Number(e.target.value); page = 1; render(); };
+    footerEl.querySelector('#emp-prev').onclick = () => { page -= 1; render(); };
+    footerEl.querySelector('#emp-next').onclick = () => { page += 1; render(); };
+
+    tableEl.querySelectorAll('[data-toggle]').forEach((cb) => {
+      cb.onclick = (e) => e.stopPropagation();
+      cb.onchange = () => toggleActive(cb.dataset.toggle, cb);
+    });
+    tableEl.querySelectorAll('label.switch').forEach((l) => { l.onclick = (e) => e.stopPropagation(); });
+
+    if (canManage) {
+      tableEl.querySelectorAll('tr[data-row]').forEach((tr) => {
+        tr.onclick = () => { window.location.hash = `#employees?edit=${tr.dataset.row}`; };
+      });
+    }
     if (window.lucide) window.lucide.createIcons({ root: container });
   }
 
-  // =========================================================================
-  // 1. Employees Tab (Add, Edit, Delete)
-  // =========================================================================
-  async function renderEmployeesTable(target) {
-    let query = supabase.from('profiles').select('*, shops(name)').order('full_name');
-    query = scoped(query);
-
-    const { data: staff, error } = await query;
-    if (error) {
-      target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
-      return;
-    }
-
-    if (!staff || staff.length === 0) {
-      target.innerHTML = `
-        <div style="padding: 48px 24px; text-align: center; color: var(--text-subtle);">
-          <p style="font-size: 0.9rem; margin-bottom: 8px;">No employees registered for this store yet.</p>
-          <button class="btn btn-teal-primary btn-sm" id="btn-empty-add-emp">+ Add First Employee</button>
-        </div>
-      `;
-      const emptyBtn = target.querySelector('#btn-empty-add-emp');
-      if (emptyBtn) emptyBtn.onclick = () => openEmployeeModal(null);
-      return;
-    }
-
-    target.innerHTML = `
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Employee Name</th>
-            <th>Email / Phone</th>
-            <th>Role</th>
-            <th>Assigned Shop</th>
-            <th>PIN sign-in</th>
-            <th>Commission</th>
-            <th>Status</th>
-            <th style="text-align:right;">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${staff
-            .map((member) => {
-              const isSelf = member.id === globalState.user?.id;
-              return `
-                <tr>
-                  <td>
-                    <strong>${member.full_name || 'Unnamed Staff'}</strong>
-                    ${isSelf ? '<span class="badge badge-teal" style="margin-left:6px;">YOU</span>' : ''}
-                  </td>
-                  <td>
-                    <div>${member.email || '-'}</div>
-                    ${member.phone ? `<div style="font-size:0.75rem; color:var(--text-muted);">${member.phone}</div>` : ''}
-                  </td>
-                  <td>
-                    <span class="badge ${member.role === 'admin' ? 'badge-teal' : ''}">${(member.role || 'staff').toUpperCase()}</span>
-                  </td>
-                  <td>${member.shops?.name || 'All Locations'}</td>
-                  <td><span style="color:var(--text-muted); font-size:0.8rem;">Available (set in Edit)</span></td>
-                  <td>${member.commission_rate || 0}%</td>
-                  <td>
-                    ${
-                      member.is_active !== false
-                        ? '<span class="badge badge-teal">Active</span>'
-                        : '<span class="badge" style="background:#fee2e2; color:#ef4444;">Suspended</span>'
-                    }
-                  </td>
-                  <td style="text-align:right; white-space:nowrap;">
-                    <button class="btn btn-outline btn-sm" data-emp-edit="${member.id}" style="margin-right:6px;">
-                      Edit
-                    </button>
-                    <button class="btn btn-outline btn-sm" data-emp-reset="${member.id}" style="margin-right:6px;" ${isSelf ? 'disabled title="Use your profile to change your own password"' : ''}>
-                      Reset password
-                    </button>
-                    <button class="btn btn-outline btn-sm text-danger" data-emp-delete="${member.id}" ${isSelf ? 'disabled title="Cannot delete your own account"' : ''}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              `;
-            })
-            .join('')}
-        </tbody>
-      </table>
-    `;
-
-    target.querySelectorAll('[data-emp-edit]').forEach((btn) => {
-      btn.onclick = () => {
-        const member = staff.find((m) => m.id === btn.dataset.empEdit);
-        if (member) openEmployeeModal(member);
-      };
-    });
-
-    target.querySelectorAll('[data-emp-reset]').forEach((btn) => {
-      btn.onclick = () => {
-        const member = staff.find((m) => m.id === btn.dataset.empReset);
-        if (member) resetEmployeePassword(member);
-      };
-    });
-
-    target.querySelectorAll('[data-emp-delete]').forEach((btn) => {
-      btn.onclick = () => {
-        const member = staff.find((m) => m.id === btn.dataset.empDelete);
-        if (member) confirmDeleteEmployee(member);
-      };
-    });
-  }
-
-  // Shows a one-time temporary password with a Copy button (avoids typing mistakes)
-  function showCredentialsModal(title, fullName, email, password) {
-    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    Modal.open({
-      title,
-      content: `
-        <p style="margin-bottom:10px;">Share these sign-in details with <strong>${esc(fullName)}</strong>. The password is shown <strong>only once</strong>.</p>
-        <div style="background:var(--bg-surface); border:1px solid var(--border-subtle); border-radius:6px; padding:12px; font-family:monospace; user-select:all;">
-          Email: ${esc(email)}<br/>
-          Temporary password: <strong>${esc(password)}</strong>
-        </div>
-        <button type="button" id="btn-copy-credentials" class="btn btn-outline btn-sm" style="margin-top:10px;">Copy details</button>
-        <p style="margin-top:10px; font-size:0.8rem; color:var(--text-muted);">Passwords are case-sensitive. Ask them to change it from their profile after the first sign-in.</p>
-      `,
-    });
-    setTimeout(() => {
-      const copyBtn = document.getElementById('btn-copy-credentials');
-      if (!copyBtn) return;
-      copyBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(`Email: ${email}\nPassword: ${password}`);
-          Toast.success('Copied to clipboard.');
-        } catch (e) {
-          Toast.error('Could not copy. Select the text and copy it manually.');
-        }
-      };
-    }, 50);
-  }
-
-  // Generates a new temporary password for an employee (server-side, same company only)
-  async function resetEmployeePassword(member) {
-    if (member.id === globalState.user?.id) return;
-    if (!window.confirm(`Create a new temporary password for ${member.full_name || member.email}? Their current password will stop working.`)) return;
+  async function toggleActive(id, checkbox) {
+    const next = checkbox.checked;
     const { data, error } = await supabase.functions.invoke('staff-admin', {
-      body: { action: 'reset_password', id: member.id },
+      body: { action: 'update', id, is_active: next },
     });
     if (error || data?.error) {
-      Toast.error(data?.error || error.message || 'Could not reset the password.');
+      checkbox.checked = !next;
+      Toast.error(data?.error || error?.message || 'Could not change the status.');
       return;
     }
-    showCredentialsModal('New temporary password', member.full_name || member.email, member.email, data.temp_password);
+    const row = rows.find((r) => r.id === id);
+    if (row) row.is_active = next;
+    Toast.success(next ? 'Employee activated.' : 'Employee deactivated. They can no longer sign in.');
   }
 
-  // Delete Employee Workflow
-  function confirmDeleteEmployee(member) {
-    if (member.id === globalState.user?.id) {
-      Toast.error('You cannot delete your currently signed-in administrator profile.');
-      return;
-    }
+  await load();
+  return () => document.removeEventListener('click', closeMenu);
+}
 
-    Modal.open({
-      title: 'Delete Employee Account',
-      content: `
-        <form id="form-employee-delete">
-          <p style="font-size:0.875rem; color:var(--text-main); margin-bottom:12px;">
-            Are you sure you want to remove <strong>${member.full_name || member.email}</strong> from your store team?
-          </p>
-          <p style="font-size:0.8rem; color:var(--text-muted); background:var(--color-danger-bg); border:1px solid #fecaca; padding:10px 12px; border-radius:6px; margin-bottom:18px;">
-            This will revoke their POS and Backoffice access immediately. Past sales receipts recorded under this employee will remain intact for audit accuracy.
-          </p>
-          <div style="display:flex; gap:10px; justify-content:flex-end;">
-            <button type="button" class="btn btn-outline" id="btn-cancel-emp-del">Cancel</button>
-            <button type="submit" class="btn" style="background:var(--color-danger); color:#fff;">Delete Employee</button>
-          </div>
-        </form>
-      `,
-      onSubmit: async () => {
-        const { data, error } = await supabase.functions.invoke('staff-admin', {
-          body: { action: 'remove', id: member.id },
-        });
-        if (error || data?.error) {
-          Toast.error(data?.error || error.message || 'Could not remove this employee.');
-          return;
-        }
-        if (data?.mode === 'deactivated') {
-          Toast.info('Employee has sales history, so the account was deactivated and sign-in disabled.');
-        } else {
-          Toast.success(`Employee "${member.full_name || member.email}" deleted.`);
-        }
-        await loadActiveTab();
-      },
-    });
+// ===========================================================================
+// CREATE / EDIT
+// ===========================================================================
+async function mountForm(container, editId) {
+  const isEdit = !!editId;
+  setTitle(isEdit ? 'Edit employee' : 'Create employee');
 
-    setTimeout(() => {
-      const cancelBtn = document.getElementById('btn-cancel-emp-del');
-      if (cancelBtn) cancelBtn.onclick = () => Modal.close();
-    }, 30);
+  if (!hasRight('employees.manage')) {
+    container.innerHTML = `
+      <div class="form-card form-page"><h3>No access</h3>
+        <p style="color:var(--text-muted); font-size:0.875rem;">Your role does not include the right to manage employees.</p></div>`;
+    return;
   }
 
-  // Add / Edit Employee Modal
-  async function openEmployeeModal(member = null) {
-    const isEdit = !!member;
-    const { data: shops } = await supabase.from('shops').select('id, name');
-    const defaultShopId = isEdit ? member.shop_id : globalState.activeShopId;
+  container.innerHTML = '<p style="padding:24px; color:var(--text-muted);">Loading...</p>';
 
-    const shopOpts =
-      `<option value="">-- All Locations / Global --</option>` +
-      (shops || [])
-        .map((s) => `<option value="${s.id}" ${defaultShopId === s.id ? 'selected' : ''}>${s.name}</option>`)
-        .join('');
+  const [rolesRes, shopsRes, memberRes, pinRes] = await Promise.all([
+    loadRoles(),
+    supabase.from('shops').select('id, name').order('name'),
+    isEdit ? supabase.from('profiles').select('*').eq('id', editId).maybeSingle() : Promise.resolve(null),
+    isEdit ? supabase.rpc('staff_pin_status') : Promise.resolve(null),
+  ]);
 
-    Modal.open({
-      title: isEdit ? `Edit Employee: ${member.full_name || member.email}` : 'Add New Employee',
-      content: `
-        <form id="form-employee-save">
-          <div class="form-group">
-            <label>Full Name</label>
-            <input type="text" name="full_name" required value="${member?.full_name || ''}" placeholder="e.g. Jane Wanjiku" />
-          </div>
+  const { roles, legacy } = rolesRes;
+  const shops = shopsRes.data || [];
+  const member = memberRes?.data || null;
 
-          <div class="form-row" style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;">
-              <label>Email Address</label>
-              <input type="email" name="email" required value="${member?.email || ''}" placeholder="cashier@store.com" ${isEdit ? 'readonly' : ''} />
-            </div>
-            <div class="form-group" style="flex:1;">
-              <label>Phone Number</label>
-              <input type="text" name="phone" value="${member?.phone || ''}" placeholder="+254 7..." />
-            </div>
-          </div>
-
-          <div class="form-row" style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;">
-              <label>Assigned System Role</label>
-              <select name="role">
-                <option value="cashier" ${member?.role === 'cashier' ? 'selected' : ''}>Cashier</option>
-                <option value="staff" ${member?.role === 'staff' ? 'selected' : ''}>Staff</option>
-                <option value="manager" ${member?.role === 'manager' ? 'selected' : ''}>Manager</option>
-                <option value="admin" ${member?.role === 'admin' ? 'selected' : ''}>Admin</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex:1;">
-              <label>Sign-in PIN (4 digits)</label>
-              <input type="password" name="pos_pin" maxlength="4" pattern="[0-9]{4}" inputmode="numeric" autocomplete="off" placeholder="${isEdit ? 'Leave blank to keep the current PIN' : 'Optional, e.g. 4829'}" />
-              <small style="color:var(--text-muted);">Easy PINs like 1234 or 0000 are refused.</small>
-            </div>
-          </div>
-
-          ${isEdit ? '' : `
-          <div class="form-group">
-            <label>Password (optional)</label>
-            <input type="password" name="password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Leave blank to generate a temporary password (or when using PIN only)" />
-            <small style="color:var(--text-muted);">At least 8 characters. Give a password, a PIN, or both.</small>
-          </div>`}
-
-          <div class="form-row" style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;">
-              <label>Assigned Store Branch</label>
-              <select name="shop_id">${shopOpts}</select>
-            </div>
-            <div class="form-group" style="flex:1;">
-              <label>Sales Commission Rate (%)</label>
-              <input type="number" step="0.1" min="0" max="100" name="commission_rate" value="${member?.commission_rate ?? 0}" />
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:normal;">
-              <input type="checkbox" name="is_active" ${member?.is_active !== false ? 'checked' : ''} />
-              Account Active (Can sign in to POS & Backoffice)
-            </label>
-          </div>
-
-          <button type="submit" class="btn btn-teal-primary btn-block">
-            ${isEdit ? 'Save Employee Changes' : 'Create Employee'}
-          </button>
-        </form>
-      `,
-      onSubmit: async (formData) => {
-        const payload = {
-          full_name: formData.full_name.trim(),
-          email: formData.email.trim().toLowerCase(),
-          phone: formData.phone?.trim() || null,
-          role: formData.role,
-          shop_id: formData.shop_id || null,
-          commission_rate: parseFloat(formData.commission_rate) || 0,
-          is_active: formData.is_active === 'on',
-        };
-
-        const pin = (formData.pos_pin || '').trim();
-        if (pin && !/^\d{4}$/.test(pin)) {
-          Toast.error('The PIN must be exactly 4 digits.');
-          return false;
-        }
-
-        if (payload.role !== 'admin' && !payload.shop_id) {
-          Toast.error('Choose a store branch for this employee (only admins can be company-wide).');
-          return false;
-        }
-
-        if (isEdit) {
-          const { email, ...editable } = payload; // login email is not editable here
-          const { error } = await supabase
-            .from('profiles')
-            .update({ ...editable, updated_at: new Date().toISOString() })
-            .eq('id', member.id);
-          if (error) {
-            Toast.error(error.message);
-            return false;
-          }
-          if (pin) {
-            const { data: pinData, error: pinError } = await supabase.functions.invoke('staff-admin', {
-              body: { action: 'set_pin', id: member.id, pin },
-            });
-            if (pinError || pinData?.error) {
-              Toast.error(`Details saved, but the PIN was not changed: ${pinData?.error || pinError.message}`);
-              return false;
-            }
-          }
-          Toast.success(pin ? 'Employee details and PIN updated.' : 'Employee details updated.');
-        } else {
-          // The login account AND the profile are created together on the server
-          const { data, error } = await supabase.functions.invoke('staff-admin', {
-            body: { action: 'create', ...payload, pos_pin: pin || null, password: (formData.password || '') || null },
-          });
-          if (error || data?.error) {
-            Toast.error(data?.error || error.message || 'Could not create the employee.');
-            return false;
-          }
-          Toast.success(`Employee "${payload.full_name}" added.`);
-
-          // Only a generated password has to be shown (once). A password you typed, or a PIN-only account, does not.
-          if (data.temp_password) {
-            setTimeout(() => showCredentialsModal('Employee created', payload.full_name, payload.email, data.temp_password), 200);
-          } else if (data.pin_set && !data.password_set) {
-            Toast.info('PIN-only account: they unlock the mobile POS lock screen with their PIN.');
-          }
-        }
-
-        await loadActiveTab();
-      },
-    });
+  if (isEdit && !member) {
+    container.innerHTML = `
+      <div class="form-card form-page"><h3>Employee not found</h3>
+        <button class="btn btn-outline" onclick="window.location.hash='#employees'">Back to employees</button></div>`;
+    return;
   }
 
-  // =========================================================================
-  // 2. Access Rights Matrix Tab
-  // =========================================================================
-  async function renderAccessRightsTable(target) {
-    let query = supabase.from('role_permissions').select('*').order('role');
-    query = scoped(query);
+  const isSelf = isEdit && member.id === globalState.user?.id;
+  const hasPin = isEdit && pinRes && !pinRes.error ? new Set(pinRes.data || []).has(member.id) : null;
+  const actorIsAdmin = isAdmin();
+  const canCreateRole = hasRight('roles.manage') && !legacy;
 
-    const { data, error } = await query;
-    if (error) {
-      target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
-      return;
-    }
+  // Managers may only hand out cashier-level roles
+  const assignable = actorIsAdmin ? roles : roles.filter((r) => r.base_role === 'cashier');
+  const currentRole = isEdit ? roleForMember(member, roles) : null;
+  if (currentRole && !assignable.find((r) => r.id === currentRole.id)) assignable.unshift(currentRole);
 
-    const rolesList = data?.length
-      ? data
-      : [
-          { id: '1', role: 'admin', can_void_receipts: true, can_apply_manual_discounts: true, can_view_cost_prices: true, can_adjust_inventory: true },
-          { id: '2', role: 'manager', can_void_receipts: true, can_apply_manual_discounts: true, can_view_cost_prices: true, can_adjust_inventory: true },
-          { id: '3', role: 'cashier', can_void_receipts: false, can_apply_manual_discounts: false, can_view_cost_prices: false, can_adjust_inventory: false },
-          { id: '4', role: 'staff', can_void_receipts: false, can_apply_manual_discounts: false, can_view_cost_prices: false, can_adjust_inventory: false },
-        ];
+  const st = {
+    roleId: currentRole?.id || '',
+    shopId: isEdit ? member.shop_id || '' : globalState.activeShopId || '',
+  };
+  const roleById = (id) => roles.find((r) => r.id === id) || null;
 
-    renderDataTable({
-      targetId: 'emp-table-content',
-      columns: [
-        { label: 'Role Tier', key: 'role', render: (r) => `<strong>${(r || '').toUpperCase()}</strong>` },
-        { label: 'Void Receipts', key: 'can_void_receipts', render: (v) => (v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked') },
-        { label: 'Manual Discounts', key: 'can_apply_manual_discounts', render: (v) => (v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked') },
-        { label: 'View COGS / Costs', key: 'can_view_cost_prices', render: (v) => (v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked') },
-        { label: 'Adjust Inventory', key: 'can_adjust_inventory', render: (v) => (v ? '<span class="badge badge-teal">Allowed</span>' : 'Locked') },
-      ],
-      data: rolesList,
-      onAction: (action, id) => {
-        const item = rolesList.find((r) => r.id === id);
-        if (item) openRoleMatrixModal(item);
-      },
-    });
+  // A manager adds people to his own shop only
+  const shopLocked = isSelf || !actorIsAdmin;
+
+  container.innerHTML = `
+    <form id="employee-form" class="form-page" novalidate>
+      <div class="form-card">
+        <h3>${isEdit ? 'Edit employee' : 'Create employee'}</h3>
+
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="emp-name" maxlength="120" value="${esc(member?.full_name || '')}" placeholder="e.g. Jane Wanjiku" autocomplete="off" />
+        </div>
+
+        <div class="form-group">
+          <label>User role</label>
+          <div class="select-search" id="role-picker">
+            <button type="button" class="select-search-btn" id="role-btn" ${isSelf ? 'disabled' : ''}>
+              <i data-lucide="users-round"></i>
+              <span class="label" id="role-label"></span>
+              <i data-lucide="chevron-down"></i>
+            </button>
+            <div class="select-search-panel hidden" id="role-panel">
+              <input type="text" class="select-search-input" id="role-search" placeholder="Search" autocomplete="off" />
+              <div class="select-search-list" id="role-list"></div>
+            </div>
+          </div>
+          ${isSelf ? '<p class="hint">You cannot change your own role.</p>' : ''}
+        </div>
+
+        <div class="form-group hidden" id="pin-block">
+          <label>POS login PIN</label>
+          ${pinBoxesHtml('emp-pin')}
+          <p class="hint" id="pin-hint"></p>
+        </div>
+
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="emp-email" value="${esc(member?.email || '')}" placeholder="name@store.com" autocomplete="off" ${isEdit ? 'readonly style="background:var(--bg-canvas);"' : ''} />
+          ${isEdit ? '<p class="hint">The sign-in email cannot be changed.</p>' : ''}
+        </div>
+
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" id="emp-phone" value="${esc(member?.phone || '')}" placeholder="+254 7..." autocomplete="off" />
+        </div>
+
+        ${isEdit ? '' : `
+        <div class="form-group hidden" id="pw-block">
+          <label>Back office password (optional)</label>
+          <input type="password" id="emp-password" minlength="8" maxlength="72" autocomplete="new-password" placeholder="Leave empty to generate a temporary password" />
+          <p class="hint">This role can open the back office with email and password. At least 8 characters.</p>
+        </div>`}
+      </div>
+
+      <div class="form-card">
+        <h3>Shop information</h3>
+        <div class="form-group">
+          <label>Shop</label>
+          <select id="emp-shop" ${shopLocked ? 'disabled' : ''}></select>
+          <p class="hint hidden" id="shop-hint">Administrators can work in all shops.</p>
+        </div>
+        <div class="form-group">
+          <label>Sales commission (%)</label>
+          <input type="number" id="emp-commission" step="0.1" min="0" max="100" value="${Number(member?.commission_rate ?? 0)}" ${isSelf ? 'disabled' : ''} />
+        </div>
+        ${isEdit ? `
+        <div class="access-toggle-row" style="padding-bottom:0;">
+          <div><strong style="font-size:0.9375rem;">Account active</strong><span>Inactive employees cannot sign in to the POS or the back office.</span></div>
+          <label class="switch"><input type="checkbox" id="emp-active" ${member.is_active !== false ? 'checked' : ''} ${isSelf ? 'disabled' : ''} /><span class="switch-slider"></span></label>
+        </div>` : ''}
+      </div>
+
+      <div class="form-card">
+        <div class="form-footer">
+          ${isEdit && !isSelf ? `
+          <div class="footer-left">
+            <button type="button" class="btn btn-outline text-danger" id="btn-delete">Delete</button>
+            <button type="button" class="btn btn-outline" id="btn-reset-pw">Reset password</button>
+          </div>` : ''}
+          <button type="button" class="btn btn-outline" id="btn-cancel">Cancel</button>
+          <button type="submit" class="btn btn-teal-primary" id="btn-save">${isEdit ? 'Save' : 'Create'}</button>
+        </div>
+      </div>
+    </form>
+  `;
+  if (window.lucide) window.lucide.createIcons({ root: container });
+
+  const $ = (sel) => container.querySelector(sel);
+  const pin = bindPinBoxes(container, 'emp-pin');
+
+  // ---- role picker ---------------------------------------------------------
+  const picker = $('#role-picker');
+  const panel = $('#role-panel');
+  const searchInput = $('#role-search');
+  const listEl = $('#role-list');
+
+  function updateRoleLabel() {
+    const role = roleById(st.roleId);
+    const label = $('#role-label');
+    label.textContent = role ? role.name : 'Select user role';
+    label.className = role ? 'label' : 'label placeholder';
   }
 
-  // =========================================================================
-  // 3. Other Staff Directory Tab
-  // =========================================================================
-  async function renderOtherStaffTable(target) {
-    let query = supabase.from('auxiliary_staff').select('*').order('full_name');
-    query = scoped(query);
+  function renderRoleList(filter = '') {
+    const f = filter.trim().toLowerCase();
+    const items = assignable.filter((r) => r.name.toLowerCase().includes(f));
+    listEl.innerHTML =
+      (canCreateRole
+        ? '<button type="button" class="select-search-option create-link" data-create-role><span>Create user role</span><i data-lucide="plus"></i></button>'
+        : '') +
+      (items.length
+        ? items
+            .map((r) => `<button type="button" class="select-search-option ${r.id === st.roleId ? 'selected' : ''}" data-role-id="${r.id}"><span>${esc(r.name)}</span></button>`)
+            .join('')
+        : '<div class="select-search-empty">No roles found.</div>');
+    if (window.lucide) window.lucide.createIcons({ root: listEl });
 
-    const { data, error } = await query;
-    if (error) {
-      target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
-      return;
-    }
-
-    renderDataTable({
-      targetId: 'emp-table-content',
-      columns: [
-        { label: 'Full Name', key: 'full_name', render: (v) => `<strong>${v}</strong>` },
-        { label: 'Role / Designation', key: 'role_title', render: (r) => `<span class="badge">${r}</span>` },
-        { label: 'Phone', key: 'phone' },
-        { label: 'National ID', key: 'national_id', render: (id) => id || '-' },
-        { label: 'Daily Compensation', key: 'daily_wage', render: (w) => `${Number(w).toLocaleString()} ${currency}` },
-        { label: 'Status', key: 'is_active', render: (act) => (act ? 'Active' : 'Inactive') },
-      ],
-      data: data || [],
-      onAction: (action, id) => {
-        const item = data.find((a) => a.id === id);
-        if (item) openAuxiliaryStaffModal(item);
-      },
-    });
-  }
-
-  // =========================================================================
-  // 4. Staff Commissions Report
-  // =========================================================================
-  async function renderCommissionsReport(target) {
-    let profQuery = supabase.from('profiles').select('id, full_name, email, commission_rate');
-    let ordQuery = supabase.from('orders').select('cashier_id, total').eq('order_status', 'completed');
-
-    profQuery = scoped(profQuery);
-    ordQuery = scoped(ordQuery);
-
-    const [{ data: staff }, { data: orders }] = await Promise.all([profQuery, ordQuery]);
-
-    const report = (staff || []).map((member) => {
-      const sales = (orders || [])
-        .filter((o) => o.cashier_id === member.id)
-        .reduce((sum, o) => sum + Number(o.total || 0), 0);
-      const rate = Number(member.commission_rate || 0);
-      const earned = Math.round(sales * (rate / 100) * 100) / 100;
-
-      return {
-        id: member.id,
-        name: member.full_name || member.email,
-        totalSales: sales,
-        rate: `${rate}%`,
-        earnedCommission: earned,
+    listEl.querySelectorAll('[data-role-id]').forEach((b) => {
+      b.onclick = () => {
+        st.roleId = b.dataset.roleId;
+        closePanel();
+        updateRoleLabel();
+        applyRole();
       };
     });
-
-    renderDataTable({
-      targetId: 'emp-table-content',
-      columns: [
-        { label: 'Employee', key: 'name', render: (n) => `<strong>${n}</strong>` },
-        { label: 'Total Sales Generated', key: 'totalSales', render: (v) => `${Number(v).toLocaleString()} ${currency}` },
-        { label: 'Agreed Rate', key: 'rate' },
-        {
-          label: 'Commission Accrued',
-          key: 'earnedCommission',
-          render: (v) => `<strong style="color:var(--teal-600);">${Number(v).toLocaleString()} ${currency}</strong>`,
-        },
-      ],
-      data: report,
-    });
-  }
-
-  // =========================================================================
-  // 5. Access Logs Tab
-  // =========================================================================
-  async function renderAccessLogsTable(target) {
-    let query = supabase.from('access_logs').select('*').order('created_at', { ascending: false }).limit(50);
-    query = scoped(query);
-
-    const { data, error } = await query;
-    if (error) {
-      target.innerHTML = `<p style="padding:20px; color:var(--color-danger);">${error.message}</p>`;
-      return;
+    const createLink = listEl.querySelector('[data-create-role]');
+    if (createLink) {
+      createLink.onclick = () => {
+        window.location.hash = `#access-rights?new=1&back=${encodeURIComponent('employees?new=1')}`;
+      };
     }
-
-    renderDataTable({
-      targetId: 'emp-table-content',
-      columns: [
-        { label: 'Account Email', key: 'user_email', render: (e) => `<strong>${e}</strong>` },
-        {
-          label: 'Event Type',
-          key: 'event_type',
-          render: (ev) => `<span class="badge ${ev === 'login' ? 'badge-teal' : ''}">${(ev || '').toUpperCase()}</span>`,
-        },
-        { label: 'Timestamp', key: 'created_at', render: (d) => new Date(d).toLocaleString() },
-        { label: 'Details', key: 'details', render: (det) => (det ? JSON.stringify(det) : '-') },
-      ],
-      data: data || [],
-    });
   }
 
-  // Granular Access Rights Matrix Modal
-  function openRoleMatrixModal(tier = null) {
-    const roleTarget = tier?.role || 'cashier';
-    Modal.open({
-      title: `Role Matrix: ${roleTarget.toUpperCase()}`,
-      content: `
-        <form id="form-role-matrix-save">
-          <input type="hidden" name="role" value="${roleTarget}" />
-          <div class="form-group">
-            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-              <input type="checkbox" name="can_void_receipts" ${tier?.can_void_receipts ? 'checked' : ''} />
-              Allow Voiding & Deleting Receipts
-            </label>
-            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-              <input type="checkbox" name="can_apply_manual_discounts" ${tier?.can_apply_manual_discounts ? 'checked' : ''} />
-              Allow Overriding / Manual Register Discounts
-            </label>
-            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer;">
-              <input type="checkbox" name="can_view_cost_prices" ${tier?.can_view_cost_prices ? 'checked' : ''} />
-              Allow Viewing Unit COGS / Cost Margins
-            </label>
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-              <input type="checkbox" name="can_adjust_inventory" ${tier?.can_adjust_inventory ? 'checked' : ''} />
-              Allow Manual Stock Count Adjustments
-            </label>
-          </div>
-          <button type="submit" class="btn btn-teal-primary btn-block">Save Permission Matrix</button>
-        </form>
-      `,
-      onSubmit: async (formData) => {
-        const payload = {
-          shop_id: globalState.activeShopId,
-          role: formData.role,
-          can_void_receipts: formData.can_void_receipts === 'on',
-          can_apply_manual_discounts: formData.can_apply_manual_discounts === 'on',
-          can_view_cost_prices: formData.can_view_cost_prices === 'on',
-          can_adjust_inventory: formData.can_adjust_inventory === 'on',
-          updated_at: new Date().toISOString(),
+  function openPanel() {
+    panel.classList.remove('hidden');
+    picker.classList.add('open');
+    searchInput.value = '';
+    renderRoleList();
+    searchInput.focus();
+  }
+  function closePanel() {
+    panel.classList.add('hidden');
+    picker.classList.remove('open');
+  }
+  $('#role-btn').onclick = (e) => {
+    e.stopPropagation();
+    if (panel.classList.contains('hidden')) openPanel();
+    else closePanel();
+  };
+  panel.onclick = (e) => e.stopPropagation();
+  searchInput.oninput = () => renderRoleList(searchInput.value);
+  const outsideClick = () => closePanel();
+  document.addEventListener('click', outsideClick);
+
+  // ---- what the chosen role shows ------------------------------------------
+  function renderShopOptions() {
+    const role = roleById(st.roleId);
+    const allShops = actorIsAdmin && role?.base_role === 'admin';
+    const select = $('#emp-shop');
+    select.innerHTML =
+      (allShops
+        ? '<option value="">All shops</option>'
+        : '<option value="" disabled>Select a shop</option>') +
+      shops.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+    if (!allShops && st.shopId === '' && shops.length === 1) st.shopId = shops[0].id;
+    if (!allShops && !shops.find((s) => s.id === st.shopId)) st.shopId = '';
+    select.value = st.shopId;
+    $('#shop-hint').classList.toggle('hidden', !allShops);
+  }
+
+  function applyRole() {
+    const role = roleById(st.roleId);
+    $('#pin-block').classList.toggle('hidden', !(role && role.pos_access));
+    const pw = $('#pw-block');
+    if (pw) pw.classList.toggle('hidden', !(role && role.backoffice_access));
+
+    const hint = $('#pin-hint');
+    if (isEdit) {
+      hint.textContent =
+        hasPin === false
+          ? 'This employee has no PIN yet. Enter one so they can sign in to the POS.'
+          : hasPin === true
+            ? 'A PIN is set. Leave empty to keep it, or enter 4 new digits to change it.'
+            : 'Enter 4 new digits to change the PIN, or leave empty to keep it.';
+    } else {
+      hint.textContent = 'Four digits the employee types on the POS lock screen. Easy PINs like 1234 or 0000 are refused.';
+    }
+    renderShopOptions();
+  }
+
+  $('#emp-shop').onchange = (e) => { st.shopId = e.target.value; };
+
+  updateRoleLabel();
+  applyRole();
+
+  // ---- cancel / delete / reset --------------------------------------------
+  $('#btn-cancel').onclick = () => { window.location.hash = '#employees'; };
+  const delBtn = $('#btn-delete');
+  if (delBtn) delBtn.onclick = () => confirmDeleteEmployee(member, () => { window.location.hash = '#employees'; });
+  const resetBtn = $('#btn-reset-pw');
+  if (resetBtn) resetBtn.onclick = () => resetEmployeePassword(member);
+
+  // ---- save ----------------------------------------------------------------
+  const form = $('#employee-form');
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+
+    const role = roleById(st.roleId);
+    const fullName = $('#emp-name').value.trim();
+    const email = $('#emp-email').value.trim().toLowerCase();
+    const phone = $('#emp-phone').value.trim();
+    const commission = parseFloat($('#emp-commission').value) || 0;
+    const pinValue = pin ? pin.value : '';
+    const password = isEdit ? '' : ($('#emp-password')?.value || '');
+    const shopId = $('#emp-shop').value || st.shopId || '';
+
+    const problem = (msg, field) => {
+      Toast.error(msg);
+      if (field) field.focus();
+      return false;
+    };
+
+    if (!fullName) return problem('Enter the employee name.', $('#emp-name'));
+    if (!role) return problem('Choose a user role.');
+    if (!isEdit && !EMAIL_RE.test(email)) return problem('Enter a valid email address.', $('#emp-email'));
+
+    if (role.pos_access) {
+      if (!isEdit && pinValue.length !== 4) {
+        pin?.setInvalid(true);
+        return problem('Enter a 4-digit POS PIN. Every employee who can use the POS needs one.');
+      }
+      if (pinValue && pinValue.length !== 4) {
+        pin?.setInvalid(true);
+        return problem('The PIN must be exactly 4 digits.');
+      }
+      if (pinValue && isWeakPin(pinValue)) {
+        pin?.setInvalid(true);
+        return problem(PIN_HELP);
+      }
+    }
+    pin?.setInvalid(false);
+
+    if (role.base_role !== 'admin' && !shopId) return problem('Choose a shop for this employee.');
+    if (password && (password.length < 8 || password.length > 72)) return problem('The password must be 8 to 72 characters.', $('#emp-password'));
+
+    const roleFields = role.legacy ? { role: role.base_role } : { role_id: role.id };
+    const saveBtn = $('#btn-save');
+    saveBtn.disabled = true;
+
+    try {
+      if (isEdit) {
+        const body = {
+          action: 'update',
+          id: member.id,
+          full_name: fullName,
+          phone: phone || null,
+          pos_pin: role.pos_access && pinValue ? pinValue : null,
         };
-
-        const { error } = await supabase.from('role_permissions').upsert([payload], { onConflict: 'shop_id, role' });
-
-        if (error) Toast.error(error.message);
-        else {
-          Toast.success('Permissions matrix saved.');
-          await loadActiveTab();
+        if (!isSelf) {
+          Object.assign(body, roleFields, {
+            shop_id: shopId || null,
+            commission_rate: commission,
+            is_active: $('#emp-active') ? $('#emp-active').checked : true,
+          });
         }
-      },
+        const { data, error } = await supabase.functions.invoke('staff-admin', { body });
+        if (error || data?.error) {
+          Toast.error(data?.error || error?.message || 'Could not save the employee.');
+          return;
+        }
+        Toast.success(body.pos_pin ? 'Employee details and PIN updated.' : 'Employee details updated.');
+        window.location.hash = '#employees';
+      } else {
+        const { data, error } = await supabase.functions.invoke('staff-admin', {
+          body: {
+            action: 'create',
+            full_name: fullName,
+            email,
+            phone: phone || null,
+            shop_id: shopId || null,
+            commission_rate: commission,
+            is_active: true,
+            pos_pin: role.pos_access ? pinValue : null,
+            password: password || null,
+            ...roleFields,
+          },
+        });
+        if (error || data?.error) {
+          Toast.error(data?.error || error?.message || 'Could not create the employee.');
+          return;
+        }
+        Toast.success(`Employee "${fullName}" added.`);
+        window.location.hash = '#employees';
+        // Only a generated back office password has to be shown (once)
+        if (data.temp_password) {
+          setTimeout(() => showCredentialsModal('Employee created', fullName, email, data.temp_password), 250);
+        }
+      }
+    } finally {
+      saveBtn.disabled = false;
+    }
+  };
+
+  // First time: the person adding employees needs a PIN of their own. The form stays behind the dialog.
+  if (!isEdit) {
+    ensureOwnPin().then((ok) => {
+      if (!ok) window.location.hash = '#employees';
     });
   }
 
-  // Other Staff Add / Edit Modal
-  function openAuxiliaryStaffModal(staffItem = null) {
-    const isEdit = !!staffItem;
-    Modal.open({
-      title: isEdit ? `Edit: ${staffItem.full_name}` : 'New Auxiliary Staff',
-      content: `
-        <form id="form-aux-save">
-          <div class="form-group">
-            <label>Full Name</label>
-            <input type="text" name="full_name" required value="${staffItem?.full_name || ''}" placeholder="Staff member name" />
-          </div>
-          <div class="form-group">
-            <label>Designation / Role Title</label>
-            <input type="text" name="role_title" required value="${staffItem?.role_title || ''}" placeholder="e.g. Delivery Rider, Inventory Sorter" />
-          </div>
-          <div class="form-row" style="display:flex; gap:12px;">
-            <div class="form-group" style="flex:1;">
-              <label>Phone Contact</label>
-              <input type="text" name="phone" value="${staffItem?.phone || ''}" placeholder="+254 7..." />
-            </div>
-            <div class="form-group" style="flex:1;">
-              <label>Daily Wage (${currency})</label>
-              <input type="number" step="0.01" name="daily_wage" value="${staffItem?.daily_wage || 0}" />
-            </div>
-          </div>
-          <button type="submit" class="btn btn-teal-primary btn-block">${isEdit ? 'Update Details' : 'Save Staff'}</button>
-        </form>
-      `,
-      onSubmit: async (formData) => {
-        const payload = {
-          shop_id: globalState.activeShopId,
-          full_name: formData.full_name,
-          role_title: formData.role_title,
-          phone: formData.phone,
-          daily_wage: parseFloat(formData.daily_wage) || 0,
-        };
-
-        const { error } = isEdit
-          ? await supabase.from('auxiliary_staff').update(payload).eq('id', staffItem.id)
-          : await supabase.from('auxiliary_staff').insert([payload]);
-
-        if (error) Toast.error(error.message);
-        else {
-          Toast.success('Staff record updated.');
-          await loadActiveTab();
-        }
-      },
-    });
-  }
-
-  await loadActiveTab();
-  return () => {};
+  return () => document.removeEventListener('click', outsideClick);
 }
