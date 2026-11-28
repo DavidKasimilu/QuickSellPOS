@@ -1,5 +1,6 @@
 import { globalState } from '../state.js';
 import { supabase } from '../supabaseClient.js';
+import { effectiveRights, rightsInclude } from './rights.js';
 
 let cachedPermissions = null;
 
@@ -38,16 +39,29 @@ export function hasPermission(allowedRoles = ['admin']) {
 }
 
 export function isAdmin() {
-  return globalState.role === 'admin';
+  return ['admin', 'owner'].includes(globalState.role);
 }
 
 export function isManagerOrAbove() {
-  return ['admin', 'manager'].includes(globalState.role);
+  return ['admin', 'owner', 'manager'].includes(globalState.role);
 }
 
-// Granular feature action checks
+// Rights of the signed-in person (from their role; administrators have everything)
+export function myRights() {
+  return effectiveRights(globalState.role, globalState.accessRole);
+}
+
+// e.g. hasRight('employees.manage'). "x.manage" also grants "x.view".
+export function hasRight(key) {
+  if (!globalState.role) return false;
+  if (isAdmin()) return true;
+  return rightsInclude(myRights(), key);
+}
+
+// Granular feature action checks (can_void_receipts, can_adjust_inventory, ...)
 export function canPerformAction(actionKey) {
   if (isAdmin()) return true;
+  if (globalState.accessRole) return rightsInclude(myRights(), actionKey);
   if (cachedPermissions && actionKey in cachedPermissions) {
     return Boolean(cachedPermissions[actionKey]);
   }
@@ -80,5 +94,10 @@ export function applyUIPermissions(container = document) {
     if (!canPerformAction(permKey)) {
       el.remove();
     }
+  });
+
+  // 3. Right-based element gating: data-right="employees.manage"
+  container.querySelectorAll('[data-right]').forEach((el) => {
+    if (!hasRight(el.getAttribute('data-right').trim())) el.remove();
   });
 }
